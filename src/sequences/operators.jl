@@ -1,4 +1,6 @@
+## the work horse behind the elemntary operations in elementary.jl
 
+# does s/f, where b is the sequence for function f, s is a constant.
 # this is getquotientseries() with c being the array with zeros everywhere except the first entry, with a value of 1.
 function getreciprocalseries(b::Vector{T}, L::Integer) where T
     @assert length(b) >= L + 1

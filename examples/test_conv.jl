@@ -1,63 +1,87 @@
 
 Random.seed!(25)
 
-function conv2(b::Vector{T}, c::Vector{T})::T where T
+include("./helpers/example_taylor_series.jl")
+include("./helpers/test_compositions.jl")
 
-    reverse!(b)
-    out = dot(b, c)
-    reverse!(b)
+L = 13
+max_discrepancy_tol = 1e-10
 
-    return out
-end
+θ_sin = 1.23
+a = rand()*2.31
+#a = 0.0043433638998377775 # problem.
+s = 3.4
 
-function conv(b::Vector{T}, c::Vector{T})::T where T
-    #@assert N <= length(b)
-    #@assert N <= length(c)
-    return sum( b[begin+i-1]*c[end-i+1] for i = 1:length(b) )
-end
+f = tt->sin(θ_sin*tt)
+g = tt->(log(tt)^2+1)
+h = tt->s*f(tt)/g(tt)
+#h = tt->1/g(tt)
 
-function conv(b::Vector{T})::T where T
-    #@assert N <= length(b)
-    #@assert N <= length(c)
-    return sum( b[begin+i-1]*b[end-i+1] for i = 1:length(b) )
-end
-
-N = 400
-b = randn(N)
-c = randn(N)
-
-# @btime conv($b,$c);
-# @btime conv2($b, $c);
-# @btime conv($b);
+#c_sine = taylorsin(a, L, θ_sin)
 
 
-N = 40
-b = randn(N)
-c = randn(N)
+N_approximations = 300
+N_tests_per_approx = 50
 
-# @btime conv($b,$c);
-# @btime conv2($b, $c);
-# @btime conv($b);
+getafunc = xx->10*rand()
+ds = runtestcompositionsingleinput(
+    PowerSeriesIVP.Reciprocal,
+    Float64,
+    N_approximations,
+    N_tests_per_approx,
+    L,
+    tt->(1/g(tt)),
+    getafunc;
+    ϵ_test_radius = max_discrepancy_tol*0.1/2, # heurestic.
+    getseqfunc = generateseqlogexample1,
+)
+@show maximum(ds), maximum(ds) < max_discrepancy_tol
 
-# 378.402 ns (0 allocations: 0 bytes)
-# 346.553 ns (0 allocations: 0 bytes)
-# 376.980 ns (0 allocations: 0 bytes)
-# 40.125 ns (0 allocations: 0 bytes)
-# 56.080 ns (0 allocations: 0 bytes)
-# 39.811 ns (0 allocations: 0 bytes)
 
-##### correctness of appendreciprocalcoeff!() as an incremental version of getreciprocalseries().
-# add test for reciprocal vs. actual reciprocal. then package as test.
 
-c = randn(9)
-q = PowerSeriesIVP.getreciprocalseries(c, length(c)-1)
+getafunc = xx->10*rand()
+ds = runtestcompositionsingleinput(
+    PowerSeriesIVP.ScaledReciprocal,
+    Float64,
+    N_approximations,
+    N_tests_per_approx,
+    L,
+    tt->(s/g(tt)),
+    getafunc,
+    s;
+    ϵ_test_radius = max_discrepancy_tol*0.1/(2*s), # heurestic.
+    getseqfunc = generateseqlogexample1,
+)
+@show maximum(ds), maximum(ds) < max_discrepancy_tol
 
-q2 = ones(1)
-q2[begin] = 1/c[begin]
-b_tilde = Vector{Float64}(undef, 0)
-α = ones(Float64,1)
 
-for k = 1:length(c)-1
-    PowerSeriesIVP.appendreciprocalcoeff!(q2, c[1:k+1], b_tilde, α)
-end
-@show norm(q-q2)
+
+getafunc = xx->10*rand()
+ds = runtestcompositiontwoinput(
+    PowerSeriesIVP.ScaledQuotient,
+    Float64,
+    N_approximations,
+    N_tests_per_approx,
+    L,
+    h,
+    getafunc,
+    s;
+    ϵ_test_radius = max_discrepancy_tol*0.1/(2*s), # heurestic.
+    getseqfunc1 = (aa,LL)->taylorsin(aa, LL, 1.23),
+    getseqfunc2 = generateseqlogexample1,
+)
+@show maximum(ds), maximum(ds) < max_discrepancy_tol
+
+
+@assert 1==2
+
+## test horner.
+a = randn()
+x = a + 0.1
+
+sol_horner = PowerSeriesIVP.evaltaylor(c, x, a)
+sol = PowerSeriesIVP.evaltaylordirect(c, x, a)
+@show abs(sol-sol_horner)
+
+@btime sol_horner = PowerSeriesIVP.evaltaylor(c, x, a)
+@btime sol = PowerSeriesIVP.evaltaylordirect(c, x, a)

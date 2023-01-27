@@ -1,9 +1,22 @@
 
 
 # use Polynomial.jl (possible large indirect dependencies) or implement horner's method to eval polynomials.
-function evaltaylor(c::Vector{T}, x::T, a)::T where T
+function evaltaylordirect(c::Vector{T}, x::T, a)::T where T
     τ = x-a
     return sum( c[i]*τ^(i-1) for i in eachindex(c) )
+end
+
+# Horner's method for evaluating a Taylor polynomial at expansion point `a` and coefficient `c`.
+function evaltaylor(c::Vector{T}, x::T, a::T)::T where T
+    
+    x0 = x-a
+
+    b = c[end]
+    for n = length(c):-1:2
+        b = c[n-1] + b*x0
+    end
+
+    return b
 end
 
 #### adaptive

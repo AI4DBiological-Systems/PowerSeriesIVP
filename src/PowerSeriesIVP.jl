@@ -2,8 +2,14 @@ module PowerSeriesIVP
 
 using LinearAlgebra
 
-include("./eval_series/taylor.jl")
-include("./composition/operators.jl")
+include("./sequences/taylor.jl")
+include("./sequences/operators.jl")
+
+include("./composite_funcs/composition_utils.jl")
+include("./composite_funcs/affine.jl")
+include("./composite_funcs/product.jl")
+include("./composite_funcs/quotient.jl")
+include("./composite_funcs/multivariate.jl")
 
 end # module PowerSeriesIVP
 
