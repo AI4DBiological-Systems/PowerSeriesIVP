@@ -63,7 +63,16 @@ end
 function conv(b::Vector{T}, c::Vector{T})::T where T
     #@assert N <= length(b)
     #@assert N <= length(c)
-    return sum( b[begin+i-1]*c[end-i+1] for i = 1:length(b) )
+
+    # sum( b[begin+i-1]*c[end-i+1] for i = 1:length(b) )
+
+    # explicit loop instead of sum because b might be empty. In which case, we want to return zero.
+    out = zero(T)
+    for i in eachindex(b)
+        out += b[begin+i-1]*c[end-i+1]
+    end
+    
+    return out
 end
 ## benchmark:
 # N = 40
@@ -82,5 +91,14 @@ end
 function conv(b::Vector{T})::T where T
     #@assert N <= length(b)
     #@assert N <= length(c)
-    return sum( b[begin+i-1]*b[end-i+1] for i = 1:length(b) )
+
+    #out = sum( b[begin+i-1]*b[end-i+1] for i = 1:length(b) )
+
+    # explicit loop instead of sum because b might be empty. In which case, we want to return zero.
+    out = zero(T)
+    for i in eachindex(b)
+        out += b[begin+i-1]*b[end-i+1]
+    end
+
+    return out
 end

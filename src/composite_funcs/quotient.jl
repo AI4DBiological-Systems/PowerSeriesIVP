@@ -76,7 +76,7 @@ end
 function initializeorder!(
     A::ScaledReciprocal{T},
     x::Vector{Vector{T}},
-    s::T,
+    s,
     ) where T
 
     initializeorder!(A.buf_reciprocal, x)
@@ -89,7 +89,7 @@ end
 function increaseorder!(
     A::ScaledReciprocal{T},
     x::Vector{Vector{T}},
-    s::T,
+    s,
     ) where T
 
     increaseorder!(A.buf_reciprocal, x)
@@ -159,7 +159,7 @@ function initializeorder!(
     A::ScaledQuotient{T},
     x::Vector{Vector{T}},
     y::Vector{Vector{T}},
-    s::T,
+    s,
     ) where T
 
     initializeorder!(A.buf_quotient, x, y)
@@ -172,7 +172,7 @@ function increaseorder!(
     A::ScaledQuotient{T},
     x::Vector{Vector{T}},
     y::Vector{Vector{T}},
-    s::T,
+    s,
     ) where T
 
     increaseorder!(A.buf_quotient, x, y)

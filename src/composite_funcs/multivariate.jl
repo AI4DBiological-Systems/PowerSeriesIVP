@@ -2,22 +2,25 @@
 # given at least the 0-th order term, compute and append the L-th coefficient of each composition transformation.
 
 
-
-struct SelfSquaredLoss{T}
+# this is an internal data structure, not a forward-facing Taylor polynomial type.
+# That is why it doesn't have the field c.
+# The fields Δ and Δ_sq are two different coefficient fields.
+# Internal data structures for used for defining forward-facing Taylor polynomial types.
+struct InterVariableDifference{T}
     # not using Array{T,3} since we might resize the order on-the-fly.
     Δ::Matrix{Vector{T}} # i x j, order.
     Δ_sq::Matrix{Vector{T}} # i x j, order.
 end
 
-function SelfSquaredLoss(::Type{T}, N::Integer, L::Integer) where T
-    return SelfSquaredLoss(
-        collect( zeros(T, L) for _ = 1:N, _ = 1:N),
-        collect( zeros(T, L) for _ = 1:N, _ = 1:N),
+function InterVariableDifference(::Type{T}, N::Integer) where T
+    return InterVariableDifference(
+        collect( zeros(T, 0) for _ = 1:N, _ = 1:N),
+        collect( zeros(T, 0) for _ = 1:N, _ = 1:N),
     )
 end
 
 function initializeorder!(
-    A::SelfSquaredLoss{T},
+    A::InterVariableDifference{T},
     c::Vector{Vector{T}},
     ) where T
 
@@ -25,7 +28,7 @@ function initializeorder!(
 end
 
 function increaseorder!(
-    A::SelfSquaredLoss{T},
+    A::InterVariableDifference{T},
     c::Vector{Vector{T}},
     ) where T
 
@@ -47,41 +50,169 @@ function increaseorder!(
             # product: conv.
             @assert length(Δ_sq[i,j]) == length(Δ[i,j]) - 1
 
-            tmp_sq = conv(A.Δ[i,j])
+            tmp_sq = conv(Δ[i,j])
             push!(Δ_sq[i,j], tmp_sq)
+            push!(Δ_sq[j,i], tmp_sq)
         end
     end
 
     return nothing
 end
 
-struct SumCols{T} # W4.
+
+###################
+
+struct ΔSumCol{T} # W4. Skips Δ[i,i] in the sum.
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
-function SumCols(::Type{T}, N::Integer)::SumCols{T} where T
-    return SumCols(initializecoefficients(T,N))
+function ΔSumCol(::Type{T}, N::Integer)::ΔSumCol{T} where T
+    return ΔSumCol(initializecoefficients(T,N))
 end
 
-function initializeorder!(A::SumCols{T}, S::Matrix{Vector{T}}) where T
-
+function initializeorder!(A::ΔSumCol{T}, S::Matrix{Vector{T}}) where T
     return increaseorder!(A, S)
 end
 
-function increaseorder!(A::SumCols{T}, S::Matrix{Vector{T}}) where T
+function increaseorder!(A::ΔSumCol{T}, S::Matrix{Vector{T}}) where T
 
     c = A.c
+    for i in axes(S,2)
+        #@assert length(c[i]) == length(S[k,i]) - 1
 
-    for d1 in axes(S,1)
-        @assert length(c[d1]) == length(S[d1,d2]) - 1
+        # sum from beginning up to index i.
+        # tmp = sum( S[k,i][end] for k in Iterators.take(axes(S,1), i-1) )
+        # tmp += sum( S[k,i][end] for k in Iterators.drop(axes(S,1), i) )
 
-        tmp = sum( S[d1,d2][end] for d2 in axes(S,2) )
-        push!(c[d1], tmp)
+        # explicit loop since the iterator might be empty, which sum() cannot handle.
+        tmp = zero(T)
+        for k in Iterators.take(axes(S,1), i-1)
+            tmp += S[k,i][end]
+        end
+        
+        # sum from index i+1 to end
+        for k in Iterators.drop(axes(S,1), i)
+            tmp += S[k,i][end]
+        end
+
+        # slow version. Slow due to the if statement that is checked in every iteration.
+        #tmp = sum( S[k,i][end] for k in axes(S,1) if i != k)
+
+        push!(c[i], tmp)
     end
 
     return nothing
 end
 
 
+###### metric problem specific.
 
+struct ΔSumColProduct{T}
+    buf_product_mat::Matrix{Vector{T}}
+    c::Vector{Vector{T}} # [variable index][order index].
+end
+
+function ΔSumColProduct(::Type{T}, N::Integer)::ΔSumColProduct{T} where T
+    return ΔSumColProduct(
+    collect( zeros(T, 0) for _ = 1:N, _ = 1:N),
+    initializecoefficients(T,N),
+    )
+end
+
+function initializeorder!(
+    Z::ΔSumColProduct{T},
+    Δ::Matrix{Vector{T}},
+    x::Vector{Vector{T}},
+    ) where T
+    
+    return increaseorder!(Z, Δ, x)
+end
+
+function increaseorder!(
+    Z::ΔSumColProduct{T},
+    Δ::Matrix{Vector{T}},
+    x::Vector{Vector{T}},
+    ) where T
+
+    c = Z.c
+    B = Z.buf_product_mat
+
+    # product.
+    for j in axes(Δ,2)
+        for i in axes(Δ,1)
+            #@assert (length(c[i]) + 1 == length(x[i]))
+            push!(B[i,j], conv(Δ[i,j], x[i]))
+        end
+    end
+
+    # sum.
+    for i in eachindex(c)
+        #@assert length(c[i]) == length(B[d1,i]) - 1
+
+        tmp = zero(T)
+        for k in Iterators.take(axes(B,1), i-1)
+            tmp += B[k,i][end]
+        end
+        
+        # sum from index i+1 to end
+        for k in Iterators.drop(axes(B,1), i)
+            tmp += B[k,i][end]
+        end
+
+        # slow version.
+        # tmp = sum( B[k,i][end] for k in axes(B,1) if k != i)
+        
+        push!(c[i], tmp)
+    end
+
+    return nothing
+end
+
+
+########## WIP
+# struct ΔBlocks{T} # ΔBlocks.
+
+#     buf_self_sq_loss::InterVariableDifference{T}
+#     buf_sum_cols_Δ::SumCol{T}
+#     buf_sum_cols_Δ_sq::SumCol{T}
+
+#     # [variable index][order index].
+#     c_W4::Vector{Vector{T}}
+#     c_W8::Vector{Vector{T}}
+#     c_W5::Vector{Vector{T}}
+#     c_W9::Vector{Vector{T}}
+# end
+
+
+# function ΔBlocks(::Type{T}, N::Integer)::ΔBlocks{T} where T
+#     buf_sum_cols_Δ = SumCol(T,N)
+#     buf_sum_cols_Δ_sq = SumCol(T,N)
+#     return ΔBlocks(
+#         InterVariableDifference(T,N),
+#         buf_sum_cols_Δ,
+#         buf_sum_cols_Δ_sq,
+#         buf_sum_cols_Δ.c,
+#         buf_sum_cols_Δ_sq.c,
+#     )
+# end
+
+# function initializeorder!(A::ΔBlocks{T}, x::Vector{Vector{T}}) where T
+
+#     initializeorder!(A.buf_self_sq_loss, x)
+
+#     initializeorder!(buf_sum_cols_Δ, A.buf_self_sq_loss.Δ)
+#     initializeorder!(buf_sum_cols_Δ_sq, A.buf_self_sq_loss.Δ_sq)
+
+#     return nothing
+# end
+
+# function increaseorder!(A::ΔBlocks{T}, x::Vector{Vector{T}}) where T
+
+#     increaseorder!(A.buf_self_sq_loss, x)
+
+#     increaseorder!(buf_sum_cols_Δ, A.buf_self_sq_loss.Δ)
+#     increaseorder!(buf_sum_cols_Δ_sq, A.buf_self_sq_loss.Δ_sq)
+
+#     return nothing
+# end
 

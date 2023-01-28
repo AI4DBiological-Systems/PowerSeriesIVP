@@ -19,6 +19,16 @@ function evaltaylor(c::Vector{T}, x::T, a::T)::T where T
     return b
 end
 
+# for test routines.
+function evaltaylorguarded(c::Vector{T}, x::T, a::T)::T where T
+    
+    if isempty(c)
+        return zero(T)
+    end
+
+    return evaltaylor(c, x, a)
+end
+
 #### adaptive
 
 # Univariate search to find a large step `α` from expansion center `a`, such that the discrepancy between the Taylor series `q` and `q_analysis`  is less than tolerance `ϵ`.
