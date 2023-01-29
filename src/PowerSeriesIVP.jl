@@ -10,6 +10,9 @@ include("./composite_funcs/affine.jl")
 include("./composite_funcs/product.jl")
 include("./composite_funcs/quotient.jl")
 include("./composite_funcs/multivariate.jl")
+include("./composite_funcs/others.jl")
+
+include("./IVPs/RQ_geodesic.jl")
 
 end # module PowerSeriesIVP
 

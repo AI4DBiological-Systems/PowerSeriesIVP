@@ -11,9 +11,6 @@ N_approximations = 10
 N_tests_per_approx = 10
 getafunc = xx->10*rand()
 
-#  I am here. implement the RHS of DE, make custom data struct for it. test,
-#   then make this cript into official test script.
-
 ######## multivariate cases.
 
 N_vars = 3
@@ -33,6 +30,8 @@ getseqfuncs[3] = (aa,LL)->taylorcos(aa, LL, θ_cos)
 
 a = rand()*2.31
 p = a + 0.01
+
+###### test individual routines.
 
 ### Δ
 
@@ -312,7 +311,7 @@ println("ScaledQuotient")
 @show maximum(ds), maximum(ds) < max_discrepancy_tol
 
 
-@assert 1==2
+#@assert 1==2
 
 ## test horner.
 a = randn()
