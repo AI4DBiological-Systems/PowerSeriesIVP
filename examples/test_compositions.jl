@@ -37,15 +37,19 @@ p = a + 0.01
 
 delta = PowerSeriesIVP.InterVariableDifference(Float64, N_vars) # test target.
 
-for l = 0:L
+l = 0
+x = collect( getseqfuncs[i](a, l) for i = 1:N_vars )
+PowerSeriesIVP.initializeorder!(delta, x)
+
+for l = 1:L
     x = collect( getseqfuncs[i](a, l) for i = 1:N_vars )
-    PowerSeriesIVP.initializeorder!(delta, x)
+    PowerSeriesIVP.increaseorder!(delta, x)
 end
 
 Δfunc = collect( xx->(fs[i](xx)-fs[j](xx)) for i = 1:N_vars, j = 1:N_vars )
 eval_oracle = collect(Δfunc[i,j](p) for i = 1:N_vars, j = 1:N_vars )
 eval_taylor = collect(
-    PowerSeriesIVP.evaltaylorguarded(delta.Δ[i,j], p, a)
+    PowerSeriesIVP.evaltaylorwithguard(delta.Δ[i,j], p, a)
     for i = 1:N_vars, j = 1:N_vars )
 
 println("Δ:")
@@ -54,7 +58,7 @@ println("Δ:")
 Δsqfunc = collect( xx->(fs[i](xx)-fs[j](xx))^2 for i = 1:N_vars, j = 1:N_vars )
 eval_oracle = collect(Δsqfunc[i,j](p) for i = 1:N_vars, j = 1:N_vars )
 eval_taylor = collect(
-    PowerSeriesIVP.evaltaylorguarded(delta.Δ_sq[i,j], p, a)
+    PowerSeriesIVP.evaltaylorwithguard(delta.Δ_sq[i,j], p, a)
     for i = 1:N_vars, j = 1:N_vars )
 
 println("Δ squared:")
@@ -66,16 +70,21 @@ buf_delta = PowerSeriesIVP.InterVariableDifference(Float64, N_vars)
 
 sc = PowerSeriesIVP.ΔSumCol(Float64, N_vars) # test target.
 
-for l = 0:L
+l = 0
+x = collect( getseqfuncs[i](a, l) for i = 1:N_vars )
+PowerSeriesIVP.initializeorder!(buf_delta, x)
+PowerSeriesIVP.initializeorder!(sc, buf_delta.Δ)
+
+for l = 1:L
     x = collect( getseqfuncs[i](a, l) for i = 1:N_vars )
-    PowerSeriesIVP.initializeorder!(buf_delta, x)
-    PowerSeriesIVP.initializeorder!(sc, buf_delta.Δ)
+    PowerSeriesIVP.increaseorder!(buf_delta, x)
+    PowerSeriesIVP.increaseorder!(sc, buf_delta.Δ)
 end
 
 Δfunc = collect( xx->(fs[i](xx)-fs[j](xx)) for i = 1:N_vars, j = 1:N_vars )
 eval_oracle = collect( sum( Δfunc[k,j](p) for k = 1:N_vars ) for j = 1:N_vars )
 eval_taylor = collect(
-    PowerSeriesIVP.evaltaylorguarded(sc.c[i], p, a)
+    PowerSeriesIVP.evaltaylorwithguard(sc.c[i], p, a)
     for i = 1:N_vars )
 
 println("ΔSumCol:")
@@ -87,17 +96,23 @@ buf_delta = PowerSeriesIVP.InterVariableDifference(Float64, N_vars)
 
 scp = PowerSeriesIVP.ΔSumColProduct(Float64, N_vars) # test target.
 
-for l = 0:L
+l = 0
+x = collect( getseqfuncs[i](a, l) for i = 1:N_vars )
+y = x
+PowerSeriesIVP.initializeorder!(buf_delta, x)
+PowerSeriesIVP.initializeorder!(scp, buf_delta.Δ, y)
+
+for l = 1:L
     x = collect( getseqfuncs[i](a, l) for i = 1:N_vars )
     y = x
-    PowerSeriesIVP.initializeorder!(buf_delta, x)
-    PowerSeriesIVP.initializeorder!(scp, buf_delta.Δ, y)
+    PowerSeriesIVP.increaseorder!(buf_delta, x)
+    PowerSeriesIVP.increaseorder!(scp, buf_delta.Δ, y)
 end
 
 Δfunc = collect( xx->(fs[i](xx)-fs[j](xx)) for i = 1:N_vars, j = 1:N_vars )
 eval_oracle = collect( sum( Δfunc[k,j](p)*fs[k](p) for k = 1:N_vars ) for j = 1:N_vars )
 eval_taylor = collect(
-    PowerSeriesIVP.evaltaylorguarded(scp.c[i], p, a)
+    PowerSeriesIVP.evaltaylorwithguard(scp.c[i], p, a)
     for i = 1:N_vars )
 
 println("ΔSumColProduct:")

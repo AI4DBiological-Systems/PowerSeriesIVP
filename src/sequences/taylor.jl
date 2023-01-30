@@ -20,7 +20,7 @@ function evaltaylor(c::Vector{T}, x::T, a::T)::T where T
 end
 
 # for test routines.
-function evaltaylorguarded(c::Vector{T}, x::T, a::T)::T where T
+function evaltaylorwithguard(c::Vector{T}, x::T, a::T)::T where T
     
     if isempty(c)
         return zero(T)

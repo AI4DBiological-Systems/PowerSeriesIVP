@@ -2,9 +2,9 @@
 Random.seed!(25)
 
 include("./helpers/example_taylor_series.jl")
-include("./helpers/test_compositions.jl")
+include("./helpers/test_helpers.jl")
 
-L = 13
+L = 3
 max_discrepancy_tol = 1e-10
 
 N_approximations = 10
@@ -27,46 +27,141 @@ getseqfuncs_x[2] = (aa,LL)->generateseqlogexample1(aa, LL)
 getseqfuncs_x[3] = (aa,LL)->taylorcos(aa, LL, θ_cos)
 
 # the derivative of xs.
-us = Vector{Function}(undef, N_vars)
+us = collect( tt->ForwardDiff.derivative(xs[i], tt) for i in eachindex(xs) )
 
-# I am here. get the derivative function's coeffs by shifting xs' coeff?
-getseqfuncs_u = Vector{Function}(undef, N_vars)
-getseqfuncs_u[1] = (aa,LL)->taylorsin(aa, LL, θ_sin)
-getseqfuncs_u[2] = (aa,LL)->generateseqlogexample1(aa, LL)
-getseqfuncs_u[3] = (aa,LL)->taylorcos(aa, LL, θ_cos)
-
+# the sequences for us.
+getseqfuncs_u = collect(
+    (aa,LL)->getderivativesequence(getseqfuncs_x[i](aa,LL+1))
+    for i = 1:N_vars)
 
 
+# # Test θ
 
+# pick exapansion time t0, and query time t.
+t0 = rand()*2.31
+t = t0 + 0.01
 
-a = rand()*2.31
-p = a + 0.01
+# pick metric parameters.
+a = 2.0
+b = 1.0
+x0 = collect( getseqfuncs_x[i](t0, 0)[begin] for i in eachindex(getseqfuncs_x) )
+u0 = collect( getseqfuncs_u[i](t0, 0)[begin] for i in eachindex(getseqfuncs_u) )
 
-###### test individual routines.
+# sanity check:
+u0_oracle = collect( us[i](t0) for i in eachindex(us) )
+x0_oracle = collect( xs[i](t0) for i in eachindex(xs) )
+@show norm(x0-x0_oracle)
+@show norm(u0-u0_oracle)
 
-### Δ
+###### test θ
 
-delta = PowerSeriesIVP.InterVariableDifference(Float64, N_vars) # test target.
+prob = PowerSeriesIVP.RQGeodesicBuffer(a, b, x0, u0) # test target.
+theta = prob.θ
 
-for l = 0:L
-    x = collect( getseqfuncs[i](a, l) for i = 1:N_vars )
-    PowerSeriesIVP.initializeorder!(delta, x)
+l = 0
+x = collect( getseqfuncs_x[i](t0, l) for i = 1:N_vars )
+u = collect( getseqfuncs_u[i](t0, l) for i = 1:N_vars )
+PowerSeriesIVP.initializeorder!(theta, x, u)
+
+for l = 1:L
+    x = collect( getseqfuncs_x[i](t0, l) for i = 1:N_vars )
+    u = collect( getseqfuncs_u[i](t0, l) for i = 1:N_vars )
+    PowerSeriesIVP.increaseorder!(theta, x, u)
 end
 
-Δfunc = collect( xx->(xs[i](xx)-xs[j](xx)) for i = 1:N_vars, j = 1:N_vars )
-eval_oracle = collect(Δfunc[i,j](p) for i = 1:N_vars, j = 1:N_vars )
-eval_taylor = collect(
-    PowerSeriesIVP.evaltaylorguarded(delta.Δ[i,j], p, a)
-    for i = 1:N_vars, j = 1:N_vars )
 
-println("Δ:")
-@show norm(eval_oracle-eval_taylor)
+#### explicit eval of θ.
 
-Δsqfunc = collect( xx->(xs[i](xx)-xs[j](xx))^2 for i = 1:N_vars, j = 1:N_vars )
-eval_oracle = collect(Δsqfunc[i,j](p) for i = 1:N_vars, j = 1:N_vars )
-eval_taylor = collect(
-    PowerSeriesIVP.evaltaylorguarded(delta.Δ_sq[i,j], p, a)
-    for i = 1:N_vars, j = 1:N_vars )
 
-println("Δ squared:")
-@show norm(eval_oracle-eval_taylor)
+x_t = evalvecfunc(xs, t)
+u_t = evalvecfunc(us, t)
+
+# sanity check
+l = L
+x = collect( getseqfuncs_x[i](t0, l) for i = 1:N_vars )
+u = collect( getseqfuncs_u[i](t0, l) for i = 1:N_vars )
+x_t_taylor = evalvectaylor(x, t, t0)
+u_t_taylor = evalvectaylor(u, t, t0)
+@show norm(x_t - x_t_taylor)
+@show norm(u_t - u_t_taylor)
+
+
+
+# test Δ
+Δ_t = evalθ(a, b, xs, us, t)[2]
+Δ_t_taylor = evalvectaylor(vec(theta.delta.Δ), t, t0)
+@show norm(Δ_t - Δ_t_taylor)
+delta_mat = reshape(Δ_t, N_vars, N_vars)
+
+# test Δ
+Δ_sq_t = evalθ(a, b, xs, us, t)[3]
+Δ_sq_t_taylor = evalvectaylor(vec(theta.delta.Δ_sq), t, t0)
+@show norm(Δ_sq_t - Δ_sq_t_taylor)
+
+# test W4
+W4_t = evalθ(a, b, xs, us, t)[4]
+W4_t_taylor = evalvectaylor(theta.W4.c, t, t0)
+@show norm(W4_t - W4_t_taylor)
+
+# test W8
+W8_t = evalθ(a, b, xs, us, t)[5]
+W8_t_taylor = evalvectaylor(theta.W8.c, t, t0)
+@show norm(W8_t - W8_t_taylor)
+
+# test A
+A_t = evalθ(a, b, xs, us, t)[6]
+A_t_taylor = evalvectaylor(theta.A.c, t, t0)
+@show norm(A_t - A_t_taylor)
+
+# test B
+B_t = evalθ(a, b, xs, us, t)[7]
+B_t_taylor = evalvectaylor(theta.B.c, t, t0)
+@show norm(B_t - B_t_taylor)
+
+# test R
+R_t = evalθ(a, b, xs, us, t)[8]
+R_t_taylor = evalvectaylor(theta.R.c, t, t0)
+@show norm(R_t - R_t_taylor)
+
+# test η
+η_t = evalθ(a, b, xs, us, t)[9]
+η_t_taylor = evalvectaylor(theta.η.c, t, t0)
+@show norm(η_t - η_t_taylor)
+
+# test C
+C_t = evalθ(a, b, xs, us, t)[10]
+C_t_taylor = evalvectaylor(theta.C.c, t, t0)
+@show norm(C_t - C_t_taylor)
+
+# test W9
+W9_t = evalθ(a, b, xs, us, t)[11]
+W9_t_taylor = evalvectaylor(theta.W9.c, t, t0)
+@show norm(W9_t - W9_t_taylor)
+
+
+# stage 3
+W3_t = evalθ(a, b, xs, us, t)[12]
+W3_t_taylor = evalvectaylor(theta.W3.c, t, t0)
+@show norm(W3_t - W3_t_taylor)
+
+W5_t = evalθ(a, b, xs, us, t)[13]
+W5_t_taylor = evalvectaylor(theta.W5.c, t, t0)
+@show norm(W5_t - W5_t_taylor)
+
+W1_t = evalθ(a, b, xs, us, t)[14]
+W1_t_taylor = evalvectaylor(theta.W1.c, t, t0)
+@show norm(W1_t - W1_t_taylor)
+
+
+#@assert 1==232
+
+# test θ
+θ_t = evalθ(a, b, xs, us, t)[1]
+
+θ_t_taylor = evalvectaylor(theta.c, t, t0)
+@show norm(θ_t - θ_t_taylor)
+
+
+
+
+

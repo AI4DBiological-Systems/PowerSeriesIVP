@@ -138,10 +138,10 @@ function increaseorder!(
     B = Z.buf_product_mat
 
     # product.
-    for j in axes(Δ,2)
-        for i in axes(Δ,1)
+    for i in axes(Δ,2)
+        for k in axes(Δ,1)
             #@assert (length(c[i]) + 1 == length(x[i]))
-            push!(B[i,j], conv(Δ[i,j], x[i]))
+            push!(B[k,i], conv(Δ[k,i], x[k]))
         end
     end
 

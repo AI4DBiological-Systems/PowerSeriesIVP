@@ -36,8 +36,25 @@ function taylorln(a::T, L::Integer)::Vector{T} where T
     return out
 end
 
+##### generic derivative
 
+# get the (L-1)-th order sequence for the derivative from a (L)-th order sequence of the differentiand.
+function getderivativesequence(c::Vector{T}) where T
+    L = length(c) - 1
 
+    out = Vector{T}(undef, L) # 
+    for m in eachindex(out)
+        out[m] = c[begin+m]*(m)
+    end
+
+    return out
+end
+# # test code:
+# a = 0.0
+# c = taylorsin(a, L, θ_sin)
+# dc_oracle = θ_sin .* taylorcos(a, L, θ_sin)
+# dc_test = getderivativesequence(c)
+# @show norm(dc_test - dc_oracle[1:length(dc_test)])
 
 ############ compositions.
 

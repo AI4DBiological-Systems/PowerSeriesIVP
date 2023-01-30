@@ -4,6 +4,7 @@ using BenchmarkTools
 
 import Random
 
+import ForwardDiff
 #import FiniteDifferences
 
 #import PyPlot

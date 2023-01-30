@@ -19,7 +19,7 @@ function initializeorder!(
         push!(c[i], x0[i])
     end
 
-    return increaseorder!(A, x)
+    return nothing
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.

@@ -173,77 +173,84 @@ end
 
 
 
+############## test RQGeodesicθ
 
-# function runtestcompositionmultivars(
-#     RT,
-#     ::Type{T},
-#     N_approximations,
-#     N_tests_per_approx,
-#     L::Integer,
-#     gs::Vector{Function},
-#     getseqfuncs::Vector,
-#     getafunc,
-#     args...;
-#     ϵ_test_radius = 1e-10,
-#     ) where T
+function evalθ(a::T, b::T, x::Vector{T}, u::Vector{T}) where T
 
-#     discrepancy = Vector{T}(undef, N_approximations)
-#     fill!(discrepancy, Inf)
+    N = length(x)
+    @assert length(u) == N
 
-#     N_vars = length(gs)
+    # stage 1
+    Δ = collect( x[i] - x[j] for i in eachindex(x), j in eachindex(x) )
+    Δ_sq = Δ .^2
 
-#     for n = 1:N_approximations
+    W4 = collect( sum( Δ_sq[i,k] for k in axes(Δ_sq,2) ) for i in axes(Δ_sq, 1) )
+    W8 = collect( sum( Δ[i,k] for k in axes(Δ,2) ) for i in axes(Δ, 1) )
+
+    W4_flip = collect( sum( Δ_sq[i,k] for i in axes(Δ_sq, 1) ) for k in axes(Δ_sq,2) )
+    @assert norm(W4-W4_flip) < 1e-15 # should be practically zero.
+
+    # RQGeodesicθ uses W8_flip instead of W8.
+    W8_flip = collect( sum( Δ[i,k] for i in axes(Δ, 1) ) for k in axes(Δ,2) )
+    @assert norm(W8+W8_flip) < 1e-15 # since W8 is anti-symmetric.
+
+    # stage 1
+    a_sq = a^2
+    b_sq = b^2
+    A = collect( a_sq + W4[i] for i in eachindex(W4) )
+    B = collect( b_sq + W4[i] for i in eachindex(W4) )
+    R = collect( (a_sq - b_sq)/A[i] for i in eachindex(A) )
+
+    # stage 2
+    η = collect( u[i]/B[i] for i in eachindex(B) )
+    C = collect( η[i]^2 for i in eachindex(η) )
+    #W9 = collect( sum(Δ[i,j]*(u[j]/B[j])^2 for j in eachindex(B) ) for i in axes(Δ,1) )
+    #@assert norm(W9+W9_flip) < 1e-15 # since W8 is anti-symmetric.
+    W9 = collect( sum(Δ[j,i]*(u[j]/B[j])^2 for j in axes(Δ,1) ) for i in eachindex(B) )
+
+    # stage 3
+    W3 = collect( u[i]*sum(Δ[k,i] for k in axes(Δ,1)) for i in eachindex(u) )
+    W5 = collect( sum( Δ[j,i]*u[j] for j in axes(Δ,1) ) for i in eachindex(u) )
+    W1 = 2 .* W5 .- W3
+    
+    # stage 4
+    W6 = η .* W1
+    W7 = B .* W9
+    W2 = W6 + W7
+
+    θ_factors = R .* W2
+    
+    # assemble θ without using stages.
+    θ = Vector{T}(undef, N)
+    for i in eachindex(θ)
+
+        term1 = -2*sum( Δ[i,j]*u[i]*u[j]/B[i] for j in axes(Δ,2) )
         
-#         a::T = getafunc(0)
+        term2 = -sum( B[i]*Δ[i,j]*(u[j]/B[j])^2 for j in axes(Δ,2) )
 
-#         bs = Vector{Vector{T}}(undef, N_vars)
-#         Xss = Vector{Vector{T}}(undef, N_vars)
-#         for i in eachindex(getseqfuncs)
-#             bs[i], Xss[i] = generatecasesetup(a, L, N_tests_per_approx;
-#                 getseqfunc = getseqfuncs[i], ϵ_test_radius = ϵ_test_radius)
-#         end
-        
-#         if all( !isempty(Xss[i]) for i in eachindex(Xss) )
-#             Xs = collect( minimum(Xss[k][i] for k in eachindex(Xss)) for i in eachindex(Xss[begin]) )
+        term3 = sum( Δ[i,k] for k in axes(Δ,2) )*(u[i]^2)/B[i]
 
-#             discrepancy[n] = testcompositionroutinemultivars(RT, Xs, bs, a, gs, args...)
-#         end
-#     end
+        θ[i] = R[i]*(term1 + term2 + term3)
+    end
+    @assert norm(θ_factors-θ) < 1e-14
 
-#     return discrepancy # Inf entries if no test points were bound to satisfy the ϵ tolerance.
-# end
+    return θ,
+        vec(Δ),  vec(Δ_sq), W4, W8_flip, A, B, R,
+        η, C, W9,
+        W3, W5, W1,
+        W6, W7, W2
+    #return θ
+end
 
-# function testcompositionroutinemultivars(RT, Xs::Vector{T}, bs::Vector{Vector{T}}, a::T, gs, args...) where T
+function evalvecfunc(xs, t::T)::Vector{T} where T
+    return collect( xs[i](t) for i in eachindex(xs) )
+end
 
-#     N_tests = length(Xs)
-#     L = length(bs[begin]) - 1 # max order of the Taylor polynomial stored in b.
+function evalθ(a::T, b::T, xs, us, t::T) where T
+    
+    return evalθ(a, b, evalvecfunc(xs, t), evalvecfunc(us, t))
+end
 
-#     # set up composition routine data structure.
-#     N = length(bs)
-#     r = RT(T, N)
-
-#     # push as we increment the order, like how the DE solver would utilize these compositions.
-#     b_pkg = collect( Vector{T}(undef,0) for _ = 1:N )
-
-#     for d in eachindex(b_pkg)
-#         push!(b_pkg[d], bs[d][begin])
-#     end
-#     PowerSeriesIVP.initializeorder!(r, b_pkg, args...)
-
-#     for l = 1:L
-#         for d in eachindex(b_pkg)
-#             push!(b_pkg[d], bs[d][begin+l])
-#         end
-#         PowerSeriesIVP.increaseorder!(r, b_pkg, args...)
-#     end
-
-#     discrepancy = Vector{T}(undef, N_tests)
-#     for n = 1:N_tests
-#         p = Xs[n]
-#         eval_taylor = collect(  PowerSeriesIVP.evaltaylor(r.c[d], p, a) for d in eachindex(gs) )
-#         eval_oracle = gs(p)
-#         discrepancy[n] = maximum(abs.(eval_taylor-eval_oracle))
-#     end
-
-#     return maximum(discrepancy)
-# end
+function evalvectaylor(c::Vector{Vector{T}}, t::T, t0::T)::Vector{T} where T
+    return collect( PowerSeriesIVP.evaltaylorwithguard(c[i], t, t0) for i in eachindex(c) )
+end
