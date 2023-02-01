@@ -13,6 +13,7 @@ include("./composite_funcs/multivariate.jl")
 include("./composite_funcs/others.jl")
 
 include("./IVPs/RQ_geodesic.jl")
+include("./IVPs/engine.jl")
 
 end # module PowerSeriesIVP
 

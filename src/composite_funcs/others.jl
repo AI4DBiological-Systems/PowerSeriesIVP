@@ -39,3 +39,22 @@ function increaseorder!(
 
     return nothing
 end
+
+# # This is for updating from an x that has just been updated, but we really want to simultaneously update A.c along with x.c.
+# # we'd need to look at the second last entry instead of the last entry.
+# function increaseorderfromderivative!(
+#     A::IntegralSequence{T},
+#     x::Vector{Vector{T}}, # [variable index][order index].
+#     ) where T
+
+#     next_order = length(x[begin])
+
+#     c = A.c
+#     for i in eachindex(c) #Iterators.drop(eachindex(c), 1)
+#         #@assert (length(c[i]) + 1 == length(x[i]))
+#         #push!(c[i], x[i][end]/(length(x[i])+1))
+#         push!(c[i], x[i][end-1]/next_order)
+#     end
+
+#     return nothing
+# end

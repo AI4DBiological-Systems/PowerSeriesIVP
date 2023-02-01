@@ -43,7 +43,7 @@ t = t0 + 0.01
 
 # pick metric parameters.
 a = 2.0
-b = 1.0
+b = 23.0
 x0 = collect( getseqfuncs_x[i](t0, 0)[begin] for i in eachindex(getseqfuncs_x) )
 u0 = collect( getseqfuncs_u[i](t0, 0)[begin] for i in eachindex(getseqfuncs_u) )
 
@@ -53,8 +53,8 @@ x0_oracle = collect( xs[i](t0) for i in eachindex(xs) )
 @show norm(x0-x0_oracle)
 @show norm(u0-u0_oracle)
 
-###### test θ
 
+# ## creat sequences for u and x.
 prob = PowerSeriesIVP.RQGeodesicBuffer(a, b, x0, u0) # test target.
 theta = prob.θ
 
@@ -71,8 +71,6 @@ end
 
 
 #### explicit eval of θ.
-
-
 x_t = evalvecfunc(xs, t)
 u_t = evalvecfunc(us, t)
 
@@ -82,8 +80,8 @@ x = collect( getseqfuncs_x[i](t0, l) for i = 1:N_vars )
 u = collect( getseqfuncs_u[i](t0, l) for i = 1:N_vars )
 x_t_taylor = evalvectaylor(x, t, t0)
 u_t_taylor = evalvectaylor(u, t, t0)
-@show norm(x_t - x_t_taylor)
-@show norm(u_t - u_t_taylor)
+@show norm(x_t - x_t_taylor) # should be 0.
+@show norm(u_t - u_t_taylor) # should be 0.
 
 
 
@@ -152,9 +150,6 @@ W1_t = evalθ(a, b, xs, us, t)[14]
 W1_t_taylor = evalvectaylor(theta.W1.c, t, t0)
 @show norm(W1_t - W1_t_taylor)
 
-
-#@assert 1==232
-
 # test θ
 θ_t = evalθ(a, b, xs, us, t)[1]
 
@@ -163,5 +158,20 @@ W1_t_taylor = evalvectaylor(theta.W1.c, t, t0)
 
 
 
+########### test DE expansion.
+T = Float64
+#h_initial = convert(T, NaN)
+h_initial = one(T)
+prob = PowerSeriesIVP.RQGeodesicBuffer(a, b, x0, u0) # test target.
 
+h = PowerSeriesIVP.computetaylorsolution!(
+    prob;
+    ϵ = convert(T, 1e-6),
+    h_initial = h_initial,
+    L_test_max = 10,
+    r_order = convert(T, 0.3),
+    h_zero_error = convert(T, Inf),
+)
 
+#### I am here. differentiate solution wrt time at t+h,
+# then get u(t+h). see if they agree...!
