@@ -4,19 +4,20 @@ struct IVPConfig{T}
     L_test_max::Int
     r_order::T
     h_zero_error::T
+    step_reduction_factor::T
     max_pieces::Int
 end
 
 function IVPConfig(
     ϵ::T;
-    h_initial = h_initial,
     L_test_max::Int = convert(Int, 10),
     r_order = convert(T, 0.3),
     h_zero_error = convert(T, Inf),
+    step_reduction_factor = convert(T, 2),
     max_pieces::Int = typemax(Int),
     ) where T
 
-    return IVPConfig(ϵ, L_test_max, r_order, h_zero_error, max_pieces)
+    return IVPConfig(ϵ, L_test_max, r_order, h_zero_error, step_reduction_factor, max_pieces)
 end
 
 struct RQGeodesicPiece{T}
@@ -56,7 +57,7 @@ function evalsolution!(
     a,
     ) where T
 
-    @assert length(x.c) == length(x.u) == length(out.position) == length(out.derivative)
+    @assert length(c.x) == length(c.u) == length(out.position) == length(out.derivative)
 
     for d in eachindex(c.x)
         out.position[d] = evaltaylor(c.x[d], t, a)
@@ -66,6 +67,7 @@ function evalsolution!(
     return nothing
 end
 
+# handles the selection of a solution piece from the piece-wise solution.
 function evalsolution!(
     out,
     A::PiecewiseTaylorPolynomial,
@@ -97,13 +99,19 @@ function evalsolution!(
     return false
 end
 
+struct RQGeodesicIVP{T}
+    a::T
+    b::T
+    x0::Vector{T}
+    u0::Vector{T}
+end
 
 # generate a piece-wise polynomials (seperately for each variable) that approximately solve an IVP of the form:
 # - starts at t = 0, stop at t = t_fin,
 # - h_initial used for adaption of the first polynomial.
 # Subsequent h_initials are based on the solved step size for the previous polynomial segment.
 function solveIVP!(
-    prob::RQGeodesicBuffer{T},
+    prob_params::RQGeodesicIVP{T},
     h_initial::T,
     t_start::T,
     t_fin::T,
@@ -113,11 +121,12 @@ function solveIVP!(
     # set up.
     t_expansion = t_start
 
-    a = prob.a
-    b = prob.b
+    a = prob_params.a
+    b = prob_params.b
+    prob = RQGeodesicBuffer(a, b, prob_params.x0, prob_params.u0)
 
     sol = PiecewiseTaylorPolynomial(
-        Vector{Vector{Vector{T}}}(undef,0),
+        Vector{RQGeodesicPiece{T}}(undef,0),
         Vector{T}(undef,0),
         Vector{T}(undef,0),
         t_start,
@@ -143,7 +152,7 @@ function solveIVP!(
     end
 
     # each iteration is a piece.
-    for _ = 2:max_pieces 
+    for _ = 2:config.max_pieces 
 
         # set up new IVP problem for the current expansion time.
         x0_current = next_conditions.position
@@ -175,7 +184,7 @@ end
 
 # mutates sol and next_conditions.
 function storesolutionpiece!(
-    sol::PiecewiseTaylorPolynomial{RQGeodesicPiece{T}},
+    sol::PiecewiseTaylorPolynomial,
     next_conditions::RQGeodesicEvaluation{T},
     prob::RQGeodesicBuffer{T},
     t_expansion::T,
@@ -183,18 +192,20 @@ function storesolutionpiece!(
     ) where T
 
     # add the coefficients for the solution piece.
-    push!(sol.coefficients, RQGeodesicPiece(prob.x.c, prob.u.c))
+    new_coefficients = RQGeodesicPiece(prob.x.c, prob.u.c)
+    push!(sol.coefficients, new_coefficients)
     push!(sol.expansion_points, t_expansion)
     push!(sol.steps, h)
 
     # get the initial conditions for the next IVP that the next solution piece solves.
-    evalsolution!(next_conditions, coefficients, t_next, t_expansion)
+    t_next = t_expansion + h
+    evalsolution!(next_conditions, new_coefficients, t_next, t_expansion)
 
     return nothing
 end
 
 function solvesegmentIVP!(
-    sol::PiecewiseTaylorPolynomial{RQGeodesicPiece{T}},
+    sol::PiecewiseTaylorPolynomial,
     next_conditions::RQGeodesicEvaluation{T},
     prob::RQGeodesicBuffer{T},
     t_expansion::T,
@@ -211,6 +222,7 @@ function solvesegmentIVP!(
         r_order = config.r_order,
         h_zero_error = config.h_zero_error,
     )
+    h = h/config.step_reduction_factor
 
     # update solution, and prepare for the next IVP.
     t_next = t_expansion + h

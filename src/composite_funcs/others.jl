@@ -28,12 +28,15 @@ function increaseorder!(
     x::Vector{Vector{T}}, # [variable index][order index].
     ) where T
 
-    next_order = length(x[begin]) + 1 # assuming all variables (outer index) in x have the same order (inner index).
+    # power series order starts at 0, but Vector{T} is 1-indexing.
+    # - therefore, we need to -1 to get the power series order.
+    # power_series_order_of_x = length(x[begin]) - 1
+    # next_order = power_series_order_of_x + 1
+    next_order = length(x[begin])
     
     c = A.c
     for i in eachindex(c) #Iterators.drop(eachindex(c), 1)
-        #@assert (length(c[i]) + 1 == length(x[i]))
-        #push!(c[i], x[i][end]/(length(x[i])+1))
+        
         push!(c[i], x[i][end]/next_order)
     end
 

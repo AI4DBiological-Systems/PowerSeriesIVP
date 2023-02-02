@@ -298,7 +298,7 @@ function computetaylorsolution!(
     getfirstorder!(prob)
     
     ### get to a high enough order so that we can start computing the error.
-    for l = 1:N_analysis_terms
+    for _ = 1:N_analysis_terms
         increaseorder!(prob)
     end
 

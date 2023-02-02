@@ -1,4 +1,9 @@
 
+function convertcompactdomain(x::T, a::T, b::T, c::T, d::T)::T where T <: Real
+
+    return (x-a)*(d-c)/(b-a)+c
+end
+
 #### generic
 
 function generatecasesetup(
