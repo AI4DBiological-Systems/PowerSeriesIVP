@@ -14,6 +14,7 @@ include("./composite_funcs/others.jl")
 
 include("./IVPs/RQ_geodesic.jl")
 include("./IVPs/engine.jl")
+include("./IVPs/utils.jl")
 
 end # module PowerSeriesIVP
 

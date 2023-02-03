@@ -7,7 +7,9 @@ import Random
 import ForwardDiff
 import FiniteDifferences
 
-#import PyPlot
+using TypedTables
+
+import PyPlot
 
 using Revise
 import PowerSeriesIVP

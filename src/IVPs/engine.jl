@@ -27,6 +27,10 @@ struct RQGeodesicPiece{T}
     u::Vector{Vector{T}} # coefficients for first-derivative of state.
 end
 
+function getNvars(c::RQGeodesicPiece)::Int
+    return length(c.x)
+end
+
 struct PiecewiseTaylorPolynomial{T,PT}
 
     # [piece index]
@@ -40,13 +44,17 @@ struct PiecewiseTaylorPolynomial{T,PT}
     t_fin::T
 end
 
+function getNvars(A::PiecewiseTaylorPolynomial)::Int
+    return length(A.coefficients[begin].x)
+end
+
 struct RQGeodesicEvaluation{T}
     position::Vector{T}
-    derivative::Vector{T}
+    velocity::Vector{T}
 end
 
 function RQGeodesicEvaluation(::Type{T}, N::Integer)::RQGeodesicEvaluation{T} where T
-    return RQGeodesicEvaluation(Vector{T}(undef, N), Vector{T}(undef, N))
+    return RQGeodesicEvaluation(ones(T,N) .* NaN,  ones(T,N) .* NaN )
 end
 
 # no checking against interval of validity here. That responsibility is on the calling routine.
@@ -57,11 +65,11 @@ function evalsolution!(
     a,
     ) where T
 
-    @assert length(c.x) == length(c.u) == length(out.position) == length(out.derivative)
+    @assert length(c.x) == length(c.u) == length(out.position) == length(out.velocity)
 
     for d in eachindex(c.x)
         out.position[d] = evaltaylor(c.x[d], t, a)
-        out.derivative[d] = evaltaylor(c.u[d], t, a)
+        out.velocity[d] = evaltaylor(c.u[d], t, a)
     end
 
     return nothing
@@ -90,7 +98,7 @@ function evalsolution!(
         end
     end
 
-    if t < expansion_point[end] + A.steps[end]
+    if t < expansion_points[end] + A.steps[end]
         evalsolution!(out, A.coefficients[end], t, expansion_points[end])
         return true
     end
@@ -98,6 +106,40 @@ function evalsolution!(
     # case: our solver algorithm did not reach t_fin, and t is beyond the last solution piece's estimated interval of validity.
     return false
 end
+
+
+function evalsolution(
+    A::PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}},
+    t,
+    )::RQGeodesicEvaluation{T} where T
+
+    out = RQGeodesicEvaluation(T, getNvars(A))
+    evalsolution!(out, A, t)
+
+    return out
+end
+
+function batchevalsolution!(
+    positions_buffer::Vector{Vector{T}},
+    velocities_buffer::Vector{Vector{T}},
+    A::PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}},
+    ts,
+    ) where T
+
+    @assert length(positions_buffer) == length(ts) == length(velocities_buffer)
+    out = RQGeodesicEvaluation(T, getNvars(A))
+
+    for n in eachindex(ts)
+        evalsolution!(out, A, ts[n])
+        positions_buffer[n][:] = out.position
+        velocities_buffer[n][:] = out.velocity
+    end
+
+    return nothing
+end
+
+###################
+
 
 struct RQGeodesicIVP{T}
     a::T
@@ -156,7 +198,7 @@ function solveIVP!(
 
         # set up new IVP problem for the current expansion time.
         x0_current = next_conditions.position
-        u0_current = next_conditions.derivative
+        u0_current = next_conditions.velocity
         prob_current = RQGeodesicBuffer(a, b, x0_current, u0_current)
         t_expansion = t_next
 
