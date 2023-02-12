@@ -1,5 +1,5 @@
 # PowerSeriesIVP
-Numerical solver for a specific initial value problem ordinary differential equation problem, via piece-wise power series approximation. Based on a recent advances of the Parker-Sochacki method, but with an automated order selection heurestic.
+Numerical solver for a specific initial value problem ordinary differential equation problem, via piece-wise power series approximation. Based on a recent advances of the Parker-Sochacki method (Guenther 2019). We include an automated order selection strategy in addition to their adaptive step-size selection strategy.
 
 The problem we solve is the geodesic for a particular diagonal metric: (WIP)
 
@@ -65,9 +65,12 @@ PowerSeriesIVP.batchevalsolution!(x_evals, u_evals, sol, t_viz)
 
 ```
 
-Visualize dimension `d_select`, using `PyPlot.jl`:
+Visualize dimension `d_select`, using `PyPlot.jl` from the Julia REPL in a terminal (i.e., not tested in a notebook environment):
 ```julia
 import PyPlot
+PyPlot.close("all") # comment this out if you don't want to close previously opened PyPlot windows.
+PyPlot.matplotlib["rcParams"][:update](["font.size" => 16, "font.family" => "serif"])
+fig_num = 1
 
 ## evaluate solution for the chosen dimension.
 d_select = 2
@@ -100,3 +103,6 @@ PyPlot.title("numerical solution, dim $d_select")
 - Add API documentation strings, and tutorials with visualization.
 - Write latex or render an image to show the metric equation on the README.md and tutorial examples.
 - Separately export the simulate IVP and simulate single piece functionalities.
+
+# Reference
+1. Guenther, Jenna, and Morgan Wolf. "An adaptive, highly accurate and efficient, parker-sochacki algorithm for numerical solutions to initial value ordinary differential equation systems." Online 12 (2019): 257-281.
