@@ -44,6 +44,10 @@ struct PiecewiseTaylorPolynomial{T,PT}
     t_fin::T
 end
 
+function getendtime(sol::PiecewiseTaylorPolynomial{T,DT})::T where {T,DT}
+    return sol.expansion_points[end] + sol.steps[end]
+end
+
 function getNvars(A::PiecewiseTaylorPolynomial)::Int
     return length(A.coefficients[begin].x)
 end

@@ -2,7 +2,7 @@
 Random.seed!(25)
 
 include("./helpers/example_taylor_series.jl")
-include("./helpers/test_compositions.jl")
+include("./helpers/test_helpers.jl")
 
 L = 13
 max_discrepancy_tol = 1e-10
@@ -326,15 +326,3 @@ println("ScaledQuotient")
 @show maximum(ds), maximum(ds) < max_discrepancy_tol
 
 
-#@assert 1==2
-
-## test horner.
-a = randn()
-x = a + 0.1
-
-sol_horner = PowerSeriesIVP.evaltaylor(c, x, a)
-sol = PowerSeriesIVP.evaltaylordirect(c, x, a)
-@show abs(sol-sol_horner)
-
-@btime sol_horner = PowerSeriesIVP.evaltaylor(c, x, a)
-@btime sol = PowerSeriesIVP.evaltaylordirect(c, x, a)

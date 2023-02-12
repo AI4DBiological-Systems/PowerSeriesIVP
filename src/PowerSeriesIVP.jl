@@ -10,7 +10,7 @@ include("./composite_funcs/affine.jl")
 include("./composite_funcs/product.jl")
 include("./composite_funcs/quotient.jl")
 include("./composite_funcs/multivariate.jl")
-include("./composite_funcs/others.jl")
+include("./composite_funcs/integral_seq.jl")
 
 include("./IVPs/RQ_geodesic.jl")
 include("./IVPs/engine.jl")

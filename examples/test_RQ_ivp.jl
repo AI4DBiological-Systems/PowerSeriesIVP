@@ -275,9 +275,8 @@ display(table)
 #   u is (probaly?) the derivative of x (see if true always?), even at piece boundary.
 #  then, verify retraction and vector transport.
 # for completeness, then verify against other DE solvers.
-
-
-@assert 1==232
+println()
+println()
 
 # select piece and test.
 piece_select = 4
