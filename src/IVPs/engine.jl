@@ -40,8 +40,13 @@ struct PiecewiseTaylorPolynomial{T,PT}
     expansion_points::Vector{T}
     steps::Vector{T} # diagnostic information. Use this to determine if t_fin was actually reached by our solver algorithm for a given ODE solution.
 
+    # the interval for the simulation. Do expansion_points + steps for the actual simulated time.
     t_start::T
     t_fin::T
+
+    # the initial conditions.
+    starting_position::Vector{T}
+    starting_velocity::Vector{T}
 end
 
 function getendtime(sol::PiecewiseTaylorPolynomial{T,DT})::T where {T,DT}
@@ -77,6 +82,8 @@ function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin:
         steps,
         t_start,
         t_fin,
+        copy(position),
+        copy(velocity),
     )
 end
 
@@ -206,6 +213,8 @@ function solveIVP!(
         Vector{T}(undef,0),
         t_start,
         t_fin,
+        prob_params.x0,
+        prob_params.u0,
     )
 
     N_vars = length(prob.x0)

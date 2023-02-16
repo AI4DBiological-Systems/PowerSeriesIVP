@@ -175,7 +175,13 @@ PyPlot.title("numerical solution, dim $d_select")
 
 # the relationship between the index-normalized Taylor coefficients of 
 # u := dx/dt  and x: they are the derivatives of x.
-[collect( curve.u[1][i] ./ i for i in eachindex(curve.u[1]) )  curve.x[1] ]
+piece_select = 1
+dim_select = 2
+display("""
+index-normalized Taylor coefficients for u := dx/dt (column 1) and x (column 2)
+""")
+display_mat = [collect( sol.coefficients[piece_select].u[dim_select][i] ./ i for i in eachindex(sol.coefficients[piece_select].u[dim_select]) )  sol.coefficients[piece_select].x[dim_select] ]
+display( display_mat )
 
 
 line = PowerSeriesIVP.createline(x0, u0, t_start, t_fin)
