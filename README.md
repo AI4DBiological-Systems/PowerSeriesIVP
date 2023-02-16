@@ -61,7 +61,8 @@ t_viz = LinRange(t_start, t_fin, N_viz)
 
 x_evals = collect( ones(N_vars) for _ = 1:N_viz )
 u_evals = collect( ones(N_vars) for _ = 1:N_viz )
-PowerSeriesIVP.batchevalsolution!(x_evals, u_evals, sol, t_viz)
+status_flags = falses(N_viz) # true for good eval by sol.
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, sol, t_viz)
 
 ```
 
@@ -94,6 +95,41 @@ PyPlot.legend()
 PyPlot.xlabel("time")
 PyPlot.ylabel("trajectory")
 PyPlot.title("numerical solution, dim $d_select")
+
+```
+
+To create a line without solving an IVP, then evaluate the line, do the following:
+```julia
+# create line
+line = PowerSeriesIVP.createline(x0, u0, t_start, t_fin)
+
+# evals.
+x_evals = collect( ones(N_vars) for _ = 1:N_viz )
+u_evals = collect( ones(N_vars) for _ = 1:N_viz )
+status_flags = falses(N_viz) # true for good eval by sol.
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, line, t_viz)
+
+
+## prepare for plot.
+d_select = 1
+y_line_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
+
+
+PyPlot.figure(fig_num)
+fig_num += 1
+
+PyPlot.plot(t_viz, y_tb_viz, label = "toolbox")
+PyPlot.plot(t_viz, y_line_viz, label = "line")
+PyPlot.plot(t_viz, line_geodesic.(t_viz), "--", label = "line geodesic")
+
+PyPlot.legend()
+PyPlot.xlabel("time")
+PyPlot.ylabel("trajectory")
+PyPlot.title("line, dim $d_select")
+
+println("check line against line_geodesic:")
+@show norm(line_geodesic.(t_viz) - y_line_viz) # should be zero.
+println()
 
 ```
 

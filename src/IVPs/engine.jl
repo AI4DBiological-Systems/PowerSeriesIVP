@@ -52,6 +52,34 @@ function getNvars(A::PiecewiseTaylorPolynomial)::Int
     return length(A.coefficients[begin].x)
 end
 
+# straight line as a PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}}
+function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin::T) where T <: AbstractFloat
+    
+    D = length(position)
+    @assert length(velocity) == D
+
+    # single piece.
+
+    # assemble coefficients
+    x = collect( [position[d]; velocity[d]] for d = 1:D ) # starting position, velocity.
+    u = collect( [velocity[d]; zero(T)] for d = 1:D ) # velocity, acceleration.
+
+    coefficients = Vector{RQGeodesicPiece{T}}(undef, 0)
+    push!(coefficients, RQGeodesicPiece(x,u))
+
+    # time.
+    expansion_points = [t_start;]
+    steps = [(t_fin-t_start)+one(T) ;] # so that the end point t_fin is included in the interval of validity for the solution piece.
+
+    return PiecewiseTaylorPolynomial(
+        coefficients,
+        expansion_points,
+        steps,
+        t_start,
+        t_fin,
+    )
+end
+
 struct RQGeodesicEvaluation{T}
     position::Vector{T}
     velocity::Vector{T}
@@ -115,26 +143,27 @@ end
 function evalsolution(
     A::PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}},
     t,
-    )::RQGeodesicEvaluation{T} where T
+    )::Tuple{RQGeodesicEvaluation{T}, Bool} where T
 
     out = RQGeodesicEvaluation(T, getNvars(A))
-    evalsolution!(out, A, t)
+    status_flag = evalsolution!(out, A, t)
 
-    return out
+    return out, status_flag
 end
 
 function batchevalsolution!(
+    status_flags::BitVector,
     positions_buffer::Vector{Vector{T}},
     velocities_buffer::Vector{Vector{T}},
     A::PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}},
     ts,
     ) where T
 
-    @assert length(positions_buffer) == length(ts) == length(velocities_buffer)
+    @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
     out = RQGeodesicEvaluation(T, getNvars(A))
 
     for n in eachindex(ts)
-        evalsolution!(out, A, ts[n])
+        status_flags[n] = evalsolution!(out, A, ts[n]) # TODO, return error flags or which evals were valid.
         positions_buffer[n][:] = out.position
         velocities_buffer[n][:] = out.velocity
     end

@@ -22,6 +22,7 @@ dxs = collect( tt->ForwardDiff.derivative(xs[d], tt) for d in eachindex(xs) )
 # initial conditions.
 t_start = rand()*3.2
 t_fin = 100.0
+#t_fin = 1000.0
 
 # pick metric parameters.
 # a = 2.0
@@ -121,7 +122,8 @@ y_toolbox = sol_toolbox.(t_viz)
 
 x_evals = collect( ones(N_vars) for _ = 1:N_viz )
 u_evals = collect( ones(N_vars) for _ = 1:N_viz )
-PowerSeriesIVP.batchevalsolution!(x_evals, u_evals, sol, t_viz)
+status_flags = falses(N_viz) # true for good eval by sol.
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, sol, t_viz)
 
 ## prepare for plot.
 d_select = 1
@@ -166,7 +168,47 @@ PyPlot.xlabel("time")
 PyPlot.ylabel("trajectory")
 PyPlot.title("numerical solution, dim $d_select")
 
-#@assert 2==44
+
+
+
+##### straight line.
+
+# the relationship between the index-normalized Taylor coefficients of 
+# u := dx/dt  and x: they are the derivatives of x.
+[collect( curve.u[1][i] ./ i for i in eachindex(curve.u[1]) )  curve.x[1] ]
+
+
+line = PowerSeriesIVP.createline(x0, u0, t_start, t_fin)
+
+# evals.
+x_evals = collect( ones(N_vars) for _ = 1:N_viz )
+u_evals = collect( ones(N_vars) for _ = 1:N_viz )
+status_flags = falses(N_viz) # true for good eval by sol.
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, line, t_viz)
+
+## prepare for plot.
+d_select = 1
+y_line_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
+
+
+PyPlot.figure(fig_num)
+fig_num += 1
+
+PyPlot.plot(t_viz, y_tb_viz, label = "toolbox")
+PyPlot.plot(t_viz, y_line_viz, label = "line")
+PyPlot.plot(t_viz, line_geodesic.(t_viz), "--", label = "line geodesic")
+
+PyPlot.legend()
+PyPlot.xlabel("time")
+PyPlot.ylabel("trajectory")
+PyPlot.title("line, dim $d_select")
+
+println("check line against line_geodesic:")
+@show norm(line_geodesic.(t_viz) - y_line_viz) # should be zero if createline() is correctly implemented.
+println()
+
+
+@assert 2==44
 
 ########### show C^{1} differentiable at piece boundaries.
 
@@ -282,7 +324,7 @@ println()
 piece_select = 4
 N_tests = 100
 
-t = t_expansion[piece_select]
+t = sol.expansion_points[piece_select]
 
 discrepancies = ones(N_tests) .* Inf
 t_records = ones(N_tests) .* Inf
@@ -301,3 +343,4 @@ t = t0 + h
 @show norm(dx_AD(t) - u_func(t))
 @show dx_AD(t)
 @show u_func(t)
+
