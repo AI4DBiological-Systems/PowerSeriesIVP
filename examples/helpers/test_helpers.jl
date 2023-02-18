@@ -178,7 +178,7 @@ end
 
 
 
-############## test RQGeodesicθ
+############## test RQ22θ
 
 function evalθ(a::T, b::T, x::Vector{T}, u::Vector{T}) where T
 
@@ -195,7 +195,7 @@ function evalθ(a::T, b::T, x::Vector{T}, u::Vector{T}) where T
     W4_flip = collect( sum( Δ_sq[i,k] for i in axes(Δ_sq, 1) ) for k in axes(Δ_sq,2) )
     @assert norm(W4-W4_flip) < 1e-15 # should be practically zero.
 
-    # RQGeodesicθ uses W8_flip instead of W8.
+    # RQ22θ uses W8_flip instead of W8.
     W8_flip = collect( sum( Δ[i,k] for i in axes(Δ, 1) ) for k in axes(Δ,2) )
     @assert norm(W8+W8_flip) < 1e-15 # since W8 is anti-symmetric.
 

@@ -1,5 +1,5 @@
 # θ := du/dt.
-struct RQGeodesicθ{T}
+struct RQ22θ{T}
 
     # stage 1
     delta::InterVariableDifference{T}
@@ -26,7 +26,7 @@ struct RQGeodesicθ{T}
 
     # du/dt.
     θ::Product{T}
-    c::Vector{Vector{T}} # this is θ.c.
+    c::Vector{Vector{T}} # this is θ.c, the coefficients for ζ.
 
     # constants
     a_sq::T
@@ -34,13 +34,13 @@ struct RQGeodesicθ{T}
     a_sq_m_b_sq::T
 end
 
-function RQGeodesicθ(a::T, b::T, N::Integer)::RQGeodesicθ{T} where T
+function RQ22θ(a::T, b::T, N::Integer)::RQ22θ{T} where T
     @assert a > zero(T)
     @assert b > zero(T)
 
     θ = Product(T,N)
 
-    return RQGeodesicθ(
+    return RQ22θ(
         InterVariableDifference(T,N),
         ΔSumCol(T,N),
         ΔSumCol(T,N),
@@ -72,7 +72,7 @@ function RQGeodesicθ(a::T, b::T, N::Integer)::RQGeodesicθ{T} where T
 end
 
 function initializeorder!(
-    p::RQGeodesicθ{T},
+    p::RQ22θ{T},
     x::Vector{Vector{T}},
     u::Vector{Vector{T}},
     ) where T
@@ -109,7 +109,7 @@ function initializeorder!(
 end
 
 function increaseorder!(
-    p::RQGeodesicθ{T},
+    p::RQ22θ{T},
     x::Vector{Vector{T}},
     u::Vector{Vector{T}},
     ) where T
@@ -147,10 +147,14 @@ end
 
 #################### DE problem.
 
-struct RQGeodesicBuffer{T}
+struct RQ22IVPBuffer{PT<:ParallelTransportTrait,T} <: GeodesicIVPBuffer # formally RQGeodesicBuffer{T}
+    
+    # used for dispatch. Its contents used only in parallel transport.
+    parallel_transport::PT
 
     # RHS of du/dt.
-    θ::RQGeodesicθ{T}
+    θ::RQ22θ{T}
+    ζ::Vector{RQ22ζ{T}} # used only in parallel transport.
 
     # variables
     u::IntegralSequence{T} # dx/dt.
@@ -161,16 +165,28 @@ struct RQGeodesicBuffer{T}
     u0::Vector{T} # dx/dt at t = 0.
 end
 
-function RQGeodesicBuffer(a::T, b::T, x0::Vector{T}, u0::Vector{T})::RQGeodesicBuffer{T} where T
+function getivpbuffer(
+    pt::PT,
+    metric_params::RQ22Metric{T},
+    x0::Vector{T},
+    u0::Vector{T},
+    )::RQ22IVPBuffer{PT, T} where {PT,T}
+
+    a = metric_params.a
+    b = metric_params.b
+
     @assert length(x0) == length(u0)
     @assert a > zero(T)
     @assert b > zero(T)
     N = length(x0)
 
-    return RQGeodesicBuffer(
+    return RQ22IVPBuffer(
+        pt,
 
         # RHS of du/dt.
-        RQGeodesicθ(a,b,N),
+        RQ22θ(a,b,N),
+        #getRQ22ζ(pt, metric_params, N),
+        Vector{RQ22ζ{T}}(undef,0),
 
         # variables
         IntegralSequence(T,N),
@@ -181,7 +197,7 @@ function RQGeodesicBuffer(a::T, b::T, x0::Vector{T}, u0::Vector{T})::RQGeodesicB
     )
 end
 
-function getfirstorder!(p::RQGeodesicBuffer{T}) where T
+function getfirstorder!(p::RQ22IVPBuffer{DisableParallelTransport,T}) where T
 
     # variables
     initializeorder!(p.x, p.x0)
@@ -198,7 +214,7 @@ function getfirstorder!(p::RQGeodesicBuffer{T}) where T
 end
 
 
-function increaseorder!(p::RQGeodesicBuffer{T}) where T
+function increaseorder!(p::RQ22IVPBuffer{DisableParallelTransport,T}) where T
 
     # du/dt
     increaseorder!(p.θ, p.x.c, p.u.c)
@@ -273,14 +289,14 @@ end
 # - N_analysis_terms > 1 attempts to mitigate this issue.
 # - Since N_analysis_terms cannot be infinite, use h_zero_error to guard the case when zero estimated error is detected. h_zero_error = Inf means no guard, and that zero error means the solution polynomial is exactly the solution of the DE.
 function computetaylorsolution!(
-    prob::RQGeodesicBuffer{T};
+    prob::RQ22IVPBuffer{PT,T};
     ϵ::T = convert(T, 1e-6),
     h_initial::T = convert(T, NaN),
     L_test_max::Integer = 10,
     r_order::T = convert(T, 0.3),
     h_zero_error::T = convert(T, Inf),
     N_analysis_terms = 2, # make larger than 2 if the solution has many consecutive vanishing Taylor coefficients for certain orders.
-    ) where T
+    ) where {PT,T}
 
     ### set up
     

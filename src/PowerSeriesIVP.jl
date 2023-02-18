@@ -2,6 +2,8 @@ module PowerSeriesIVP
 
 using LinearAlgebra
 
+
+
 include("./sequences/taylor.jl")
 include("./sequences/operators.jl")
 
@@ -12,6 +14,7 @@ include("./composite_funcs/quotient.jl")
 include("./composite_funcs/multivariate.jl")
 include("./composite_funcs/integral_seq.jl")
 
+include("./IVPs/types.jl")
 include("./IVPs/RQ_geodesic.jl")
 include("./IVPs/engine.jl")
 include("./IVPs/utils.jl")

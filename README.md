@@ -1,5 +1,5 @@
 # PowerSeriesIVP
-Numerical solver for a specific initial value problem ordinary differential equation problem, via piece-wise power series approximation. Based on a recent advances of the Parker-Sochacki method (Guenther 2019). We include an automated order selection strategy in addition to their adaptive step-size selection strategy.
+Numerical solver for a specific initial value problem ordinary differential equation problem, via piece-wise power series approximation. Based on a recent advances of the Parker-Sochacki method (Guenther 2019). We added an automated order selection strategy in addition to their adaptive step-size selection strategy.
 
 The problem we solve is the geodesic for a particular diagonal metric: (WIP)
 
@@ -45,8 +45,16 @@ config = PowerSeriesIVP.IVPConfig(
     step_reduction_factor = 2.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
 )
-prob_params = PowerSeriesIVP.RQGeodesicIVP(a, b, x0, u0)
-sol = PowerSeriesIVP.solveIVP!(prob_params, h_initial, t_start, t_fin, config);
+metric_params = PowerSeriesIVP.RQ22Metric(a,b)
+prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0)
+sol = PowerSeriesIVP.solveIVP!(
+    prob_params,
+    PowerSeriesIVP.DisableParallelTransport(),
+    h_initial,
+    t_start,
+    t_fin,
+    config,
+)
 println("The estimated interval of validity of the piece-wise numerical solution is from time ", t_start, " to ", PowerSeriesIVP.getendtime(sol))
 println()
 
@@ -98,6 +106,16 @@ PyPlot.title("numerical solution, dim $d_select")
 
 ```
 
+To run a single query, do the following:
+```julia
+T = eltype(x0)
+t = clamp(t_start + rand(), t_start, t_fin)
+sol_eval = PowerSeriesIVP.RQGeodesicEvaluation(T, PowerSeriesIVP.getNvars(sol))
+status_flag = PowerSeriesIVP.evalsolution!(sol_eval, sol, t)
+@show sol_eval.position # the queried position.
+@show sol_eval.velocity # the queried velocity.
+```
+
 To create a line without solving an IVP, then evaluate the line, do the following:
 ```julia
 # create line
@@ -118,7 +136,6 @@ y_line_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
 PyPlot.figure(fig_num)
 fig_num += 1
 
-PyPlot.plot(t_viz, y_tb_viz, label = "toolbox")
 PyPlot.plot(t_viz, y_line_viz, label = "line")
 PyPlot.plot(t_viz, line_geodesic.(t_viz), "--", label = "line geodesic")
 
@@ -134,7 +151,6 @@ println()
 ```
 
 # TODO:
-- Add a gain parameter to the quadratic rational metric.
 - Make the test-oriented scripts in `\examples` into test sets.
 - Add API documentation strings, and tutorials with visualization.
 - Write latex or render an image to show the metric equation on the README.md and tutorial examples.

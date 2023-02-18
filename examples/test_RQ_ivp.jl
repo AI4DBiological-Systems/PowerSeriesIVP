@@ -54,8 +54,16 @@ config = PowerSeriesIVP.IVPConfig(
     step_reduction_factor = 2.0,
     max_pieces = 100000000,
 )
-prob_params = PowerSeriesIVP.RQGeodesicIVP(a, b, x0, u0)
-sol = PowerSeriesIVP.solveIVP!(prob_params, h_initial, t_start, t_fin, config)
+metric_params = PowerSeriesIVP.RQ22Metric(a,b)
+prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0)
+sol = PowerSeriesIVP.solveIVP!(
+    prob_params,
+    PowerSeriesIVP.DisableParallelTransport(),
+    h_initial,
+    t_start,
+    t_fin,
+    config,
+)
 
 # package up for analysis.
 orders = collect( length(sol.coefficients[d].x[begin]) for d in eachindex(sol.coefficients) )

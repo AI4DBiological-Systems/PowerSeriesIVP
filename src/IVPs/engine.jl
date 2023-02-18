@@ -181,31 +181,26 @@ end
 ###################
 
 
-struct RQGeodesicIVP{T}
-    a::T
-    b::T
-    x0::Vector{T}
-    u0::Vector{T}
-end
-
 # generate a piece-wise polynomials (seperately for each variable) that approximately solve an IVP of the form:
 # - starts at t = 0, stop at t = t_fin,
 # - h_initial used for adaption of the first polynomial.
 # Subsequent h_initials are based on the solved step size for the previous polynomial segment.
 function solveIVP!(
-    prob_params::RQGeodesicIVP{T},
+    prob_params::GeodesicIVPProblem{MT,T},
+    parallel_transport::PT,
     h_initial::T,
     t_start::T,
     t_fin::T,
     config::IVPConfig{T},
-    ) where T
+    ) where {MT<:MetricParams, PT<:ParallelTransportTrait, T}
 
     # set up.
     t_expansion = t_start
 
-    a = prob_params.a
-    b = prob_params.b
-    prob = RQGeodesicBuffer(a, b, prob_params.x0, prob_params.u0)
+    # a = prob_params.a
+    # b = prob_params.b
+    metric_params = prob_params.metric_params
+    prob = getivpbuffer(parallel_transport, metric_params, prob_params.x0, prob_params.u0)
 
     sol = PiecewiseTaylorPolynomial(
         Vector{RQGeodesicPiece{T}}(undef,0),
@@ -241,7 +236,7 @@ function solveIVP!(
         # set up new IVP problem for the current expansion time.
         x0_current = next_conditions.position
         u0_current = next_conditions.velocity
-        prob_current = RQGeodesicBuffer(a, b, x0_current, u0_current)
+        prob_current = getivpbuffer(parallel_transport, metric_params, x0_current, u0_current)
         t_expansion = t_next
 
         # solve for the current solution piece.
@@ -270,10 +265,10 @@ end
 function storesolutionpiece!(
     sol::PiecewiseTaylorPolynomial,
     next_conditions::RQGeodesicEvaluation{T},
-    prob::RQGeodesicBuffer{T},
+    prob::RQ22IVPBuffer{PT,T},
     t_expansion::T,
     h::T,
-    ) where T
+    ) where {PT<:ParallelTransportTrait, T}
 
     # add the coefficients for the solution piece.
     new_coefficients = RQGeodesicPiece(prob.x.c, prob.u.c)
@@ -291,11 +286,11 @@ end
 function solvesegmentIVP!(
     sol::PiecewiseTaylorPolynomial,
     next_conditions::RQGeodesicEvaluation{T},
-    prob::RQGeodesicBuffer{T},
+    prob::RQ22IVPBuffer{PT,T},
     t_expansion::T,
     h_initial,
     config,
-    ) where T
+    ) where {PT<:ParallelTransportTrait,T}
 
     # solve first one.
     h = computetaylorsolution!(

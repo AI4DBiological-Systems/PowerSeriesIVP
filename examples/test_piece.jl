@@ -55,7 +55,13 @@ x0_oracle = collect( xs[i](t0) for i in eachindex(xs) )
 
 
 # ## creat sequences for u and x.
-prob = PowerSeriesIVP.RQGeodesicBuffer(a, b, x0, u0) # test target.
+metric_params = PowerSeriesIVP.RQ22Metric(a,b)
+prob = PowerSeriesIVP.getivpbuffer(
+    PowerSeriesIVP.DisableParallelTransport(),
+    metric_params,
+    x0,
+    u0,
+) # test target.
 theta = prob.θ
 
 l = 0
@@ -162,7 +168,13 @@ W1_t_taylor = evalvectaylor(theta.W1.c, t, t0)
 T = Float64
 #h_initial = convert(T, NaN)
 h_initial = one(T)
-prob = PowerSeriesIVP.RQGeodesicBuffer(a, b, x0, u0) # test target.
+metric_params = PowerSeriesIVP.RQ22Metric(a,b)
+prob = PowerSeriesIVP.getivpbuffer(
+    PowerSeriesIVP.DisableParallelTransport(),
+    metric_params,
+    x0,
+    u0,
+) # test target.
 
 h = PowerSeriesIVP.computetaylorsolution!(
     prob;
