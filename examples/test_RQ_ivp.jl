@@ -255,14 +255,14 @@ function evalpiecewisesolAD(::Type{FT}, A::PowerSeriesIVP.PiecewiseTaylorPolynom
     return NaN
 end
 
-function evalpiecewisesolAD(::Type{EvalXTrait}, c::PowerSeriesIVP.RQGeodesicPiece, t, a)
+function evalpiecewisesolAD(::Type{EvalXTrait}, c::PowerSeriesIVP.GeodesicPiece, t, a)
 
     @assert length(c.x) == length(c.u)
 
     return collect( evaltaylorAD(c.x[d], t, a) for d in eachindex(c.x) )
 end
 
-function evalpiecewisesolAD(::Type{EvalUTrait}, c::PowerSeriesIVP.RQGeodesicPiece, t, a)
+function evalpiecewisesolAD(::Type{EvalUTrait}, c::PowerSeriesIVP.GeodesicPiece, t, a)
 
     @assert length(c.x) == length(c.u)
 

@@ -15,8 +15,9 @@ include("./composite_funcs/multivariate.jl")
 include("./composite_funcs/integral_seq.jl")
 
 include("./IVPs/types.jl")
-include("./IVPs/RQ_geodesic.jl")
-include("./IVPs/engine.jl")
+include("./IVPs/RQ22.jl")
+include("./IVPs/geodesic_engine.jl")
+include("./IVPs/engine.jl") # move contents and rename this file.
 include("./IVPs/utils.jl")
 
 end # module PowerSeriesIVP

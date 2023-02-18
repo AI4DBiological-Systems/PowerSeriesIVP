@@ -110,7 +110,7 @@ To run a single query, do the following:
 ```julia
 T = eltype(x0)
 t = clamp(t_start + rand(), t_start, t_fin)
-sol_eval = PowerSeriesIVP.RQGeodesicEvaluation(T, PowerSeriesIVP.getNvars(sol))
+sol_eval = PowerSeriesIVP.GeodesicEvaluation(T, PowerSeriesIVP.getNvars(sol))
 status_flag = PowerSeriesIVP.evalsolution!(sol_eval, sol, t)
 @show sol_eval.position # the queried position.
 @show sol_eval.velocity # the queried velocity.

@@ -20,14 +20,14 @@ function IVPConfig(
     return IVPConfig(ϵ, L_test_max, r_order, h_zero_error, step_reduction_factor, max_pieces)
 end
 
-struct RQGeodesicPiece{T}
+struct GeodesicPiece{T}
     
     # [variable index][order index]
     x::Vector{Vector{T}} # coefficients for the solution state.
     u::Vector{Vector{T}} # coefficients for first-derivative of state.
 end
 
-function getNvars(c::RQGeodesicPiece)::Int
+function getNvars(c::GeodesicPiece)::Int
     return length(c.x)
 end
 
@@ -57,7 +57,7 @@ function getNvars(A::PiecewiseTaylorPolynomial)::Int
     return length(A.coefficients[begin].x)
 end
 
-# straight line as a PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}}
+# straight line as a PiecewiseTaylorPolynomial{T,GeodesicPiece{T}}
 function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin::T) where T <: AbstractFloat
     
     D = length(position)
@@ -69,8 +69,8 @@ function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin:
     x = collect( [position[d]; velocity[d]] for d = 1:D ) # starting position, velocity.
     u = collect( [velocity[d]; zero(T)] for d = 1:D ) # velocity, acceleration.
 
-    coefficients = Vector{RQGeodesicPiece{T}}(undef, 0)
-    push!(coefficients, RQGeodesicPiece(x,u))
+    coefficients = Vector{GeodesicPiece{T}}(undef, 0)
+    push!(coefficients, GeodesicPiece(x,u))
 
     # time.
     expansion_points = [t_start;]
@@ -87,19 +87,24 @@ function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin:
     )
 end
 
-struct RQGeodesicEvaluation{T}
+struct GeodesicEvaluation{T}
     position::Vector{T}
     velocity::Vector{T}
+    transported_vectors::Vector{Vector{T}}
 end
 
-function RQGeodesicEvaluation(::Type{T}, N::Integer)::RQGeodesicEvaluation{T} where T
-    return RQGeodesicEvaluation(ones(T,N) .* NaN,  ones(T,N) .* NaN )
+function GeodesicEvaluation(::Type{T}, N::Integer)::GeodesicEvaluation{T} where T
+    return GeodesicEvaluation(
+        ones(T,N) .* NaN,
+        ones(T,N) .* NaN,
+        Vector{Vector{T}}(undef, 0),
+    )
 end
 
 # no checking against interval of validity here. That responsibility is on the calling routine.
 function evalsolution!(
-    out::RQGeodesicEvaluation{T},
-    c::RQGeodesicPiece{T},
+    out::GeodesicEvaluation{T},
+    c::GeodesicPiece{T},
     t,
     a,
     ) where T
@@ -148,11 +153,11 @@ end
 
 
 function evalsolution(
-    A::PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}},
+    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     t,
-    )::Tuple{RQGeodesicEvaluation{T}, Bool} where T
+    )::Tuple{GeodesicEvaluation{T}, Bool} where T
 
-    out = RQGeodesicEvaluation(T, getNvars(A))
+    out = GeodesicEvaluation(T, getNvars(A))
     status_flag = evalsolution!(out, A, t)
 
     return out, status_flag
@@ -162,12 +167,12 @@ function batchevalsolution!(
     status_flags::BitVector,
     positions_buffer::Vector{Vector{T}},
     velocities_buffer::Vector{Vector{T}},
-    A::PiecewiseTaylorPolynomial{T,RQGeodesicPiece{T}},
+    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     ts,
     ) where T
 
     @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = RQGeodesicEvaluation(T, getNvars(A))
+    out = GeodesicEvaluation(T, getNvars(A))
 
     for n in eachindex(ts)
         status_flags[n] = evalsolution!(out, A, ts[n]) # TODO, return error flags or which evals were valid.
@@ -187,7 +192,7 @@ end
 # Subsequent h_initials are based on the solved step size for the previous polynomial segment.
 function solveIVP!(
     prob_params::GeodesicIVPProblem{MT,T},
-    parallel_transport::PT,
+    pt_trait::PT,
     h_initial::T,
     t_start::T,
     t_fin::T,
@@ -200,10 +205,12 @@ function solveIVP!(
     # a = prob_params.a
     # b = prob_params.b
     metric_params = prob_params.metric_params
-    prob = getivpbuffer(parallel_transport, metric_params, prob_params.x0, prob_params.u0)
+    prob = getivpbuffer(
+        #parallel_transport,
+        metric_params, prob_params.x0, prob_params.u0)
 
     sol = PiecewiseTaylorPolynomial(
-        Vector{RQGeodesicPiece{T}}(undef,0),
+        Vector{GeodesicPiece{T}}(undef,0),
         Vector{T}(undef,0),
         Vector{T}(undef,0),
         t_start,
@@ -213,13 +220,14 @@ function solveIVP!(
     )
 
     N_vars = length(prob.x0)
-    next_conditions = RQGeodesicEvaluation(T, N_vars)
+    next_conditions = GeodesicEvaluation(T, N_vars)
 
     # solve for the first solution piece.
     t_next = solvesegmentIVP!(
         sol,
         next_conditions,
         prob,
+        pt_trait,    
         t_expansion,
         h_initial,
         config,
@@ -236,7 +244,9 @@ function solveIVP!(
         # set up new IVP problem for the current expansion time.
         x0_current = next_conditions.position
         u0_current = next_conditions.velocity
-        prob_current = getivpbuffer(parallel_transport, metric_params, x0_current, u0_current)
+        prob_current = getivpbuffer(
+            #parallel_transport,
+            metric_params, x0_current, u0_current)
         t_expansion = t_next
 
         # solve for the current solution piece.
@@ -244,6 +254,7 @@ function solveIVP!(
             sol,
             next_conditions,
             prob_current,
+            pt_trait,
             t_expansion,
             #sol.steps[end], # use the step from the last solution piece as the initial segment. actually, might not make sense for the geodesic setting, where extreme accuracy might not be needed.
             h_initial, # more direct control over how large the step sizes could be. set this to be large to encourage taking a big step and high-order.
@@ -264,14 +275,15 @@ end
 # mutates sol and next_conditions.
 function storesolutionpiece!(
     sol::PiecewiseTaylorPolynomial,
-    next_conditions::RQGeodesicEvaluation{T},
-    prob::RQ22IVPBuffer{PT,T},
+    next_conditions::GeodesicEvaluation{T},
+    prob::RQ22IVPBuffer{T},
+    pt_trait::PT, # I am here. need to store the paralel transported stuff from porb into sol if pt_trait is enabled..
     t_expansion::T,
     h::T,
     ) where {PT<:ParallelTransportTrait, T}
 
     # add the coefficients for the solution piece.
-    new_coefficients = RQGeodesicPiece(prob.x.c, prob.u.c)
+    new_coefficients = GeodesicPiece(prob.x.c, prob.u.c)
     push!(sol.coefficients, new_coefficients)
     push!(sol.expansion_points, t_expansion)
     push!(sol.steps, h)
@@ -285,8 +297,9 @@ end
 
 function solvesegmentIVP!(
     sol::PiecewiseTaylorPolynomial,
-    next_conditions::RQGeodesicEvaluation{T},
-    prob::RQ22IVPBuffer{PT,T},
+    next_conditions::GeodesicEvaluation{T},
+    prob::RQ22IVPBuffer{T},
+    pt_trait::PT,
     t_expansion::T,
     h_initial,
     config,
@@ -294,7 +307,8 @@ function solvesegmentIVP!(
 
     # solve first one.
     h = computetaylorsolution!(
-        prob;
+        prob,
+        pt_trait;
         ϵ = config.ϵ,
         h_initial = h_initial,
         L_test_max = config.L_test_max,
@@ -305,12 +319,8 @@ function solvesegmentIVP!(
 
     # update solution, and prepare for the next IVP.
     t_next = t_expansion + h
-    storesolutionpiece!(sol, next_conditions, prob, t_expansion, h)
+    storesolutionpiece!(sol, next_conditions, prob, pt_trait, t_expansion, h)
     
     return t_next
 end
 
-# move to geodesic.
-function vectortransport()
-    #
-end
