@@ -10,7 +10,7 @@ function getfirstorder!(p::GeodesicIVPBuffer, _::DisableParallelTransport)
     # du/dt
     initializeorder!(p.θ, p.x.c, p.u.c)
 
-    # variables
+    # variables: first update.
     increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
     increaseorder!(p.u, p.θ.c)
     
@@ -30,6 +30,56 @@ function increaseorder!(p::GeodesicIVPBuffer, _::DisableParallelTransport)
     return nothing
 end
 
+
+function getfirstorder!(p::GeodesicIVPBuffer, _::EnableParallelTransport)
+
+    pt = p.parallel_transport
+
+    # set up the geodesic variables and related quantities.
+    getfirstorder!(p, DisableParallelTransport())
+
+    # set up the transport vector variables and quantities.
+    for m in eachindex(pt)
+        
+        # variables
+        initializeorder!(pt[m].v, pt[m].v0)
+
+        # du/dt
+        initializeorder!(pt[m].ζ, p.θ, pt[m].v.c)
+
+        # variables: first update.
+        initializeorder!(pt[m].v, pt[m].ζ)
+
+        # increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
+        # increaseorder!(p.u, p.θ.c)
+    end
+
+    return nothing
+end
+
+
+function increaseorder!(p::GeodesicIVPBuffer, _::EnableParallelTransport)
+
+    pt = p.parallel_transport
+
+    # set up the geodesic variables and related quantities.
+    increaseorder!(p, DisableParallelTransport())
+
+    # update the transport vector variables and quantities.
+    for m in eachindex(pt)
+    
+        # dv/dt
+        increaseorder!(pt[m].ζ, p.θ, pt[m].v.c)
+
+        # variables: first update.
+        increaseorder!(pt[m].v, pt[m].ζ)
+
+        # increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
+        # increaseorder!(p.u, p.θ.c)
+    end
+    
+    return nothing
+end
 
 ###### adaptive step
 

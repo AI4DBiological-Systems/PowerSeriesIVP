@@ -148,9 +148,15 @@ end
 #################### geodesic IVP problem.
 
 struct RQ22ParallelTransport{T}
-    ζ::Vector{RQ22ζ{T}}
-    v_set::Vector{IntegralSequence{T}}
-    v0_set::Vector{Vector{T}}
+
+    # RHS of dv/dt.
+    ζ::RQ22ζ{T}
+
+    # variable.
+    v::IntegralSequence{T} 
+    
+    # initial condition.
+    v0::Vector{T}
 end
 
 struct RQ22IVPBuffer{T} <: GeodesicIVPBuffer # formally RQGeodesicBuffer{T}
@@ -206,75 +212,68 @@ end
 
 ################### parallel transport
 
-# I am here.
+
 function initializeorder!(
-    p::RQ22ζ{T},
-    x::Vector{Vector{T}},
-    u::Vector{Vector{T}},
+    ζ::RQ22ζ{T},
+    θ::RQ22θ{T},
+    v::Vector{Vector{T}},
     ) where T
     
-    @assert length(x) == length(u)
+    #@assert length(v) == length(u)
 
-    # stage 1
-    initializeorder!(p.delta, x)
-    initializeorder!(p.W4, p.delta.Δ_sq)
-    initializeorder!(p.W8, p.delta.Δ)
-    initializeorder!(p.A, p.W4.c, p.a_sq)
-    initializeorder!(p.B, p.W4.c, p.b_sq)
-    initializeorder!(p.R, p.A.c, p.a_sq_m_b_sq)
+    # # stage 1
+    # initializeorder!(p.delta, x)
+    # initializeorder!(p.W4, p.delta.Δ_sq)
+    # initializeorder!(p.W8, p.delta.Δ)
+    # initializeorder!(p.A, p.W4.c, p.a_sq)
+    # initializeorder!(p.B, p.W4.c, p.b_sq)
+    # initializeorder!(p.R, p.A.c, p.a_sq_m_b_sq)
 
     # stage 2
-    initializeorder!(p.η, u, p.B.c)
-    initializeorder!(p.C, p.η.c)
-    initializeorder!(p.W9, p.delta.Δ, p.C.c) # ΔSumColProduct
+    initializeorder!(ζ.σ, v, θ.B.c)
+    initializeorder!(ζ.Z0, ζ.σ.c, θ.η.c)
+    initializeorder!(ζ.Z9, θ.delta.Δ, ζ.Z0.c) # ΔSumColProduct
 
     # stage 3
-    initializeorder!(p.W3, p.W8.c, u)
-    initializeorder!(p.W5, p.delta.Δ, u)
-    initializeorder!(p.W1, p.W5.c, p.W3.c, convert(T, 2))
+    initializeorder!(ζ.Z3, θ.W8.c, v)
+    initializeorder!(ζ.Z5, θ.delta.Δ, v)
+    initializeorder!(ζ.Z1, ζ.Z5.c, ζ.Z3.c, convert(T, 2))
 
     # stage 4
-    initializeorder!(p.W6, p.η.c, p.W1.c)
-    initializeorder!(p.W7, p.B.c, p.W9.c)
-    initializeorder!(p.W2, p.W6.c, p.W7.c)
+    initializeorder!(ζ.Z6, θ.η.c, ζ.Z1.c)
+    initializeorder!(ζ.Z7, θ.B.c, ζ.Z9.c)
+    initializeorder!(ζ.Z2, ζ.Z6.c, ζ.Z7.c)
 
     # du/dt.
-    initializeorder!(p.θ, p.R.c, p.W2.c) # Product
+    initializeorder!(ζ.ζ, θ.R.c, ζ.Z2.c) # Product
 
     return nothing
 end
 
+
 function increaseorder!(
-    p::RQ22ζ{T},
-    x::Vector{Vector{T}},
-    u::Vector{Vector{T}},
+    ζ::RQ22ζ{T},
+    θ::RQ22θ{T},
+    v::Vector{Vector{T}},
     ) where T
 
-    # stage 1
-    increaseorder!(p.delta, x)
-    increaseorder!(p.W4, p.delta.Δ_sq)
-    increaseorder!(p.W8, p.delta.Δ)
-    increaseorder!(p.A, p.W4.c, p.a_sq)
-    increaseorder!(p.B, p.W4.c, p.b_sq)
-    increaseorder!(p.R, p.A.c, p.a_sq_m_b_sq)
-
     # stage 2
-    increaseorder!(p.η, u, p.B.c)
-    increaseorder!(p.C, p.η.c)
-    increaseorder!(p.W9, p.delta.Δ, p.C.c) # ΔSumColProduct
+    increaseorder!(ζ.σ, v, θ.B.c)
+    increaseorder!(ζ.Z0, ζ.σ.c, θ.η.c)
+    increaseorder!(ζ.Z9, θ.delta.Δ, ζ.Z0.c) # ΔSumColProduct
 
     # stage 3
-    increaseorder!(p.W3, p.W8.c, u)
-    increaseorder!(p.W5, p.delta.Δ, u)
-    increaseorder!(p.W1, p.W5.c, p.W3.c, convert(T, 2))
+    increaseorder!(ζ.Z3, θ.W8.c, v)
+    increaseorder!(ζ.Z5, θ.delta.Δ, v)
+    increaseorder!(ζ.Z1, ζ.Z5.c, ζ.Z3.c, convert(T, 2))
 
     # stage 4
-    increaseorder!(p.W6, p.η.c, p.W1.c)
-    increaseorder!(p.W7, p.B.c, p.W9.c)
-    increaseorder!(p.W2, p.W6.c, p.W7.c)
+    increaseorder!(ζ.Z6, θ.η.c, ζ.Z1.c)
+    increaseorder!(ζ.Z7, θ.B.c, ζ.Z9.c)
+    increaseorder!(ζ.Z2, ζ.Z6.c, ζ.Z7.c)
 
     # RHS of du/dt.
-    increaseorder!(p.θ, p.R.c, p.W2.c)
+    increaseorder!(ζ.ζ, θ.R.c, ζ.Z2.c)
 
     return nothing
 end

@@ -12,16 +12,28 @@ struct GeodesicIVPProblem{MT,T}
     metric_params::MT
     x0::Vector{T}
     u0::Vector{T}
+    v0_set::Vector{Vector{T}}
 end
+
+function GeodesicIVPProblem(
+    metric_params::MT,
+    x0::Vector{T},
+    u0::Vector{T},
+    )::GeodesicIVPProblem{MT,T} where {MT,T}
+
+    return GeodesicIVPProblem(metric_params, x0, u0, Vector{Vector{T}}(undef, 0))
+end
+
 
 abstract type ParallelTransportTrait end
 
-struct ParallelTransport{T} <: ParallelTransportTrait
-    v0_set::Vector{Vector{T}} # v at t=0.
-    v_set::Vector{IntegralSequence{T}}
-end
+# struct ParallelTransport{T} <: ParallelTransportTrait
+#     v0_set::Vector{Vector{T}} # v at t=0.
+#     v_set::Vector{IntegralSequence{T}}
+# end
 
 struct DisableParallelTransport <: ParallelTransportTrait end
+struct EnableParallelTransport <: ParallelTransportTrait end
 
 #####
 
@@ -34,7 +46,7 @@ struct RQ22ζ{T}
     # stage 1
     # delta::InterVariableDifference{T}
     ## W4::ΔSumCol{T}
-    Z8::ΔSumCol{T}
+    #Z8::ΔSumCol{T}
     ## A::AddConstant{T}
     # B::AddConstant{T}
     # R::ScaledReciprocal{T}
