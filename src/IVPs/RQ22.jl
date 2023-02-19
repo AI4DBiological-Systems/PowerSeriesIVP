@@ -159,6 +159,27 @@ struct RQ22ParallelTransport{T}
     v0::Vector{T}
 end
 
+function RQ22ParallelTransport(
+    a::T,
+    b::T,
+    v0::Vector{T},
+    )::RQ22ParallelTransport{T} where T
+
+    N = length(v0)
+
+    return RQ22ParallelTransport(
+
+        # RHS of du/dt.
+        RQ22ζ(a, b, N),
+
+        # variables
+        IntegralSequence(T, N),
+        
+        # initial conditions
+        v0,
+    )
+end
+
 struct RQ22IVPBuffer{T} <: GeodesicIVPBuffer # formally RQGeodesicBuffer{T}
     
     # Its contents used only in parallel transport.
@@ -179,10 +200,10 @@ struct RQ22IVPBuffer{T} <: GeodesicIVPBuffer # formally RQGeodesicBuffer{T}
 end
 
 function getivpbuffer(
-    #pt::PT,
     metric_params::RQ22Metric{T},
     x0::Vector{T},
     u0::Vector{T},
+    v0_set::Vector{Vector{T}},
     )::RQ22IVPBuffer{T} where T
 
     a = metric_params.a
@@ -195,10 +216,10 @@ function getivpbuffer(
 
     return RQ22IVPBuffer(
         #pt,
-        Vector{RQ22ParallelTransport{T}}(undef,0),
+        collect( RQ22ParallelTransport(a, b, v0_set[m]) for m = 1:length(v0_set) ),
 
         # RHS of du/dt.
-        RQ22θ(a,b,N),
+        RQ22θ(a, b, N),
 
         # variables
         IntegralSequence(T,N),
@@ -208,7 +229,6 @@ function getivpbuffer(
         x0, u0,
     )
 end
-
 
 ################### parallel transport
 

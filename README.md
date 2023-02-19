@@ -29,6 +29,13 @@ t_fin = 100.0 # finish time.
 
 x0 = randn(N_vars) # starting position.
 u0 = randn(N_vars) # starting velocity.
+
+# transport 2 vector fields.
+N_parallel_vector_fields = 2
+
+## set to same as u.
+v0_set = collect( copy(u0) for _ = 1:N_parallel_vector_fields)
+
 ```
 
 Solve:
@@ -46,10 +53,11 @@ config = PowerSeriesIVP.IVPConfig(
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
 )
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0)
+prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
 sol = PowerSeriesIVP.solveIVP!(
     prob_params,
-    PowerSeriesIVP.DisableParallelTransport(),
+    PowerSeriesIVP.EnableParallelTransport(),
+    # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
     h_initial,
     t_start,
     t_fin,
@@ -69,8 +77,30 @@ t_viz = LinRange(t_start, t_fin, N_viz)
 
 x_evals = collect( ones(N_vars) for _ = 1:N_viz )
 u_evals = collect( ones(N_vars) for _ = 1:N_viz )
+
+N_transports = PowerSeriesIVP.getNtransports(sol)
+vs_evals = collect( collect( ones(N_vars) for _ = 1:N_transports ) for _ = 1:N_viz )
 status_flags = falses(N_viz) # true for good eval by sol.
-PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, sol, t_viz)
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, vs_evals, sol, t_viz)
+
+
+# in this example script, the evaluated vector fields should be the same as u.
+
+function sumvectorfielddiff(vs_evals, u_evals)
+    discrepancy = 0.0
+    for i in eachindex(vs_evals)
+        for m in eachindex(vs_evals[i])
+            discrepancy += norm(vs_evals[i][m] - u_evals[i])
+        end
+    end
+    return discrepancy
+end
+
+# This should be zero since our initial conditions for all of the vector fields are the same as the initial conditions for u.
+println("transport vector field evals vs. u:")
+@show sumvectorfielddiff(vs_evals, u_evals)
+println()
+
 
 ```
 
@@ -83,7 +113,6 @@ fig_num = 1
 
 ## evaluate solution for the chosen dimension.
 d_select = 2
-y_tb_viz = collect( y_toolbox[n][d_select] for n in eachindex(y_toolbox) )
 y_psm_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
 
 ## evluate the line discribed by the initial derivative condition.
@@ -109,11 +138,24 @@ PyPlot.title("numerical solution, dim $d_select")
 To run a single query, do the following:
 ```julia
 T = eltype(x0)
-t = clamp(t_start + rand(), t_start, t_fin)
-sol_eval = PowerSeriesIVP.GeodesicEvaluation(T, PowerSeriesIVP.getNvars(sol))
-status_flag = PowerSeriesIVP.evalsolution!(sol_eval, sol, t)
-@show sol_eval.position # the queried position.
-@show sol_eval.velocity # the queried velocity.
+t_select = 3 # index selected for this test, from the eval positions, t_viz.
+t = clamp(t_viz[t_select], t_start, t_fin)
+sol_eval = PowerSeriesIVP.GeodesicEvaluation(
+    T,
+    PowerSeriesIVP.getNvars(sol),
+    PowerSeriesIVP.getNtransports(sol),
+)
+status_flag = PowerSeriesIVP.evalsolution!(
+    sol_eval,
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol,
+    t,
+)
+@show norm(sol_eval.position - x_evals[t_select]) # the queried position.
+@show norm(sol_eval.velocity - u_evals[t_select]) # the queried velocity.
+@show norm(sol_eval.vector_field - vs_evals[t_select]) # the queried velocity.
+println()
+
 ```
 
 To create a line without solving an IVP, then evaluate the line, do the following:

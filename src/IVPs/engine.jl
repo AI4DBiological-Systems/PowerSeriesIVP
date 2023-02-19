@@ -51,7 +51,7 @@ function getNvars(c::GeodesicPiece)::Int
     return length(c.x)
 end
 
-struct PiecewiseTaylorPolynomial{T,PT}
+struct PiecewiseTaylorPolynomial{T,PT<:GeodesicPiece}
 
     # [piece index]
     coefficients::Vector{PT}
@@ -68,6 +68,10 @@ struct PiecewiseTaylorPolynomial{T,PT}
     starting_position::Vector{T}
     starting_velocity::Vector{T}
     starting_vectors::Vector{Vector{T}} # transport vectors.
+end
+
+function getNtransports(A::PiecewiseTaylorPolynomial)
+    return length(A.coefficients[begin].vs)
 end
 
 function getendtime(sol::PiecewiseTaylorPolynomial{T,DT})::T where {T,DT}
@@ -115,11 +119,11 @@ struct GeodesicEvaluation{T}
     vector_field::Vector{Vector{T}}
 end
 
-function GeodesicEvaluation(::Type{T}, N::Integer)::GeodesicEvaluation{T} where T
+function GeodesicEvaluation(::Type{T}, N_vars::Integer, N_transports::Integer)::GeodesicEvaluation{T} where T
     return GeodesicEvaluation(
-        ones(T,N) .* NaN,
-        ones(T,N) .* NaN,
-        Vector{Vector{T}}(undef, 0),
+        ones(T, N_vars) .* NaN,
+        ones(T, N_vars) .* NaN,
+        collect( ones(T, N_vars) .* NaN for _ = 1:N_transports ),
     )
 end
 
@@ -153,9 +157,9 @@ function evalsolution!(
 
     evalsolution!(out, DisableParallelTransport(), c, t, a)
 
-    for d in eachindex(c.x)
-        for m in eachindex(c.vs)
-            out.velocity[d] = evaltaylor(c.vs[m][d], t, a)
+    for m in eachindex(c.vs)
+        for d in eachindex(c.vs[m])
+            out.vector_field[m][d] = evaltaylor(c.vs[m][d], t, a)
         end
     end
 
@@ -202,7 +206,7 @@ function evalsolution(
     t,
     )::Tuple{GeodesicEvaluation{T}, Bool} where {PT,T}
 
-    out = GeodesicEvaluation(T, getNvars(A))
+    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
     status_flag = evalsolution!(out, pt_trait, A, t)
 
     return out, status_flag
@@ -217,7 +221,7 @@ function batchevalsolution!(
     ) where T
 
     @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getNvars(A))
+    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
 
     for n in eachindex(ts)
         status_flags[n] = evalsolution!(out, DisableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.
@@ -239,7 +243,7 @@ function batchevalsolution!(
     ) where T
 
     @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getNvars(A))
+    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
 
     for n in eachindex(ts)
         status_flags[n] = evalsolution!(out, EnableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.
@@ -278,8 +282,11 @@ function solveIVP!(
     # b = prob_params.b
     metric_params = prob_params.metric_params
     prob = getivpbuffer(
-        #parallel_transport,
-        metric_params, prob_params.x0, prob_params.u0)
+        metric_params,
+        prob_params.x0,
+        prob_params.u0,
+        prob_params.v0_set,
+    )
 
     sol = PiecewiseTaylorPolynomial(
         Vector{GeodesicPiece{T}}(undef,0),
@@ -292,8 +299,11 @@ function solveIVP!(
         prob_params.v0_set,
     )
 
-    N_vars = length(prob.x0)
-    next_conditions = GeodesicEvaluation(T, N_vars)
+    next_conditions = GeodesicEvaluation(
+        T,
+        getNvars(prob_params),
+        getNtransports(prob_params),
+    )
 
     # solve for the first solution piece.
     t_next = solvesegmentIVP!(
@@ -305,7 +315,7 @@ function solveIVP!(
         h_initial,
         config,
     )
-    
+
     # check stopping condition
     if t_next > t_fin
         return sol
@@ -315,11 +325,12 @@ function solveIVP!(
     for _ = 2:config.max_pieces 
 
         # set up new IVP problem for the current expansion time.
-        x0_current = next_conditions.position
-        u0_current = next_conditions.velocity
         prob_current = getivpbuffer(
-            #parallel_transport,
-            metric_params, x0_current, u0_current)
+            metric_params,
+            next_conditions.position,
+            next_conditions.velocity,
+            next_conditions.vector_field,
+        )
         t_expansion = t_next
 
         # solve for the current solution piece.
@@ -364,7 +375,7 @@ function storesolutionpiece!(
     # get the initial conditions for the next IVP that the next solution piece solves.
     t_next = t_expansion + h
     evalsolution!(next_conditions, pt_trait, new_coefficients, t_next, t_expansion)
-
+    
     return nothing
 end
 

@@ -57,10 +57,10 @@ x0_oracle = collect( xs[i](t0) for i in eachindex(xs) )
 # ## creat sequences for u and x.
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
 prob = PowerSeriesIVP.getivpbuffer(
-    #PowerSeriesIVP.DisableParallelTransport(),
     metric_params,
     x0,
     u0,
+    Vector{Vector{Float64}}(undef, 0),
 ) # test target.
 theta = prob.θ
 
@@ -170,10 +170,10 @@ T = Float64
 h_initial = one(T)
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
 prob = PowerSeriesIVP.getivpbuffer(
-    #PowerSeriesIVP.DisableParallelTransport(),
     metric_params,
     x0,
     u0,
+    Vector{Vector{T}}(undef, 0),
 ) # test target.
 
 h = PowerSeriesIVP.computetaylorsolution!(

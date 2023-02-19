@@ -48,7 +48,7 @@ function getfirstorder!(p::GeodesicIVPBuffer, _::EnableParallelTransport)
         initializeorder!(pt[m].ζ, p.θ, pt[m].v.c)
 
         # variables: first update.
-        initializeorder!(pt[m].v, pt[m].ζ)
+        increaseorder!(pt[m].v, pt[m].ζ.c)
 
         # increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
         # increaseorder!(p.u, p.θ.c)
@@ -72,7 +72,7 @@ function increaseorder!(p::GeodesicIVPBuffer, _::EnableParallelTransport)
         increaseorder!(pt[m].ζ, p.θ, pt[m].v.c)
 
         # variables: first update.
-        increaseorder!(pt[m].v, pt[m].ζ)
+        increaseorder!(pt[m].v, pt[m].ζ.c)
 
         # increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
         # increaseorder!(p.u, p.θ.c)

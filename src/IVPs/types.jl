@@ -24,6 +24,13 @@ function GeodesicIVPProblem(
     return GeodesicIVPProblem(metric_params, x0, u0, Vector{Vector{T}}(undef, 0))
 end
 
+function getNvars(A::GeodesicIVPProblem)
+    return length(A.x0)
+end
+
+function getNtransports(A::GeodesicIVPProblem)
+    return length(A.v0_set)
+end
 
 abstract type ParallelTransportTrait end
 
@@ -54,7 +61,7 @@ struct RQ22ζ{T}
     # stage 2
     σ::Quotient{T} # v/B
     Z0::Product{T} # η*σ
-    W9::ΔSumColProduct{T}
+    Z9::ΔSumColProduct{T}
 
     # stage 3
     Z3::Product{T}
@@ -83,7 +90,7 @@ function RQ22ζ(a::T, b::T, N::Integer)::RQ22ζ{T} where T
     ζ = Product(T,N)
 
     return RQ22ζ(
-        ΔSumCol(T,N),
+        #ΔSumCol(T,N),
         
         # stage 2
         Quotient(T,N),

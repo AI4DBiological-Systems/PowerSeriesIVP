@@ -36,6 +36,17 @@ b = 3.34
 x0 = collect( xs[i](t_start) for i in eachindex(xs) )
 u0 = collect( dxs[i](t_start) for i in eachindex(dxs) )
 
+# ## transport vector fields.
+
+# transport 2 vector fields.
+N_parallel_vector_fields = 2
+
+## set to same as u.
+v0_set = collect( copy(u0) for _ = 1:N_parallel_vector_fields)
+
+# ## set to random.
+# v0_set = collect( randn(N_vars) for _ = 1:N_parallel_vector_fields )
+
 ########### test DE expansion.
 T = Float64
 #h_initial = convert(T, NaN) # use default strategy to get h_intial for solving each solution piece.
@@ -43,22 +54,45 @@ h_initial = one(T)
 
 ############ solve for piece-wise solution, then show it is C^{1} differentiable.
 
-println("solveIVP!")
+# println("solveIVP!")
+# ϵ = 1e-6
+# config = PowerSeriesIVP.IVPConfig(
+#     ϵ;
+#     L_test_max = 10,
+#     #L_test_max = 30,
+#     r_order = 0.3,
+#     h_zero_error = Inf,
+#     step_reduction_factor = 2.0,
+#     max_pieces = 100000000,
+# )
+# metric_params = PowerSeriesIVP.RQ22Metric(a,b)
+# prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0)
+# sol = PowerSeriesIVP.solveIVP!(
+#     prob_params,
+#     PowerSeriesIVP.DisableParallelTransport(),
+#     h_initial,
+#     t_start,
+#     t_fin,
+#     config,
+# )
+
+
+##### solve IVP with parallel transport.
+println("solveIVP, with parallel transport")
 ϵ = 1e-6
 config = PowerSeriesIVP.IVPConfig(
     ϵ;
     L_test_max = 10,
-    #L_test_max = 30,
     r_order = 0.3,
     h_zero_error = Inf,
     step_reduction_factor = 2.0,
     max_pieces = 100000000,
 )
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0)
+prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
 sol = PowerSeriesIVP.solveIVP!(
     prob_params,
-    PowerSeriesIVP.DisableParallelTransport(),
+    PowerSeriesIVP.EnableParallelTransport(),
     h_initial,
     t_start,
     t_fin,
@@ -68,8 +102,6 @@ sol = PowerSeriesIVP.solveIVP!(
 # package up for analysis.
 orders = collect( length(sol.coefficients[d].x[begin]) for d in eachindex(sol.coefficients) )
 sol_fun = tt->evalsolutionvectorout(sol, tt)
-
-
 
 
 ###### check against DiffEq.
@@ -130,8 +162,29 @@ y_toolbox = sol_toolbox.(t_viz)
 
 x_evals = collect( ones(N_vars) for _ = 1:N_viz )
 u_evals = collect( ones(N_vars) for _ = 1:N_viz )
+
+N_transports = PowerSeriesIVP.getNtransports(sol)
+vs_evals = collect( collect( ones(N_vars) for _ = 1:N_transports ) for _ = 1:N_viz )
 status_flags = falses(N_viz) # true for good eval by sol.
-PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, sol, t_viz)
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, vs_evals, sol, t_viz)
+
+
+# in this example script, the evaluated vector fields should be the same as u.
+
+function sumvectorfielddiff(vs_evals, u_evals)
+    discrepancy = 0.0
+    for i in eachindex(vs_evals)
+        for m in eachindex(vs_evals[i])
+            discrepancy += norm(vs_evals[i][m] - u_evals[i])
+        end
+    end
+    return discrepancy
+end
+
+# This should be zero since our initial conditions for all of the vector fields are the same as the initial conditions for u.
+println("transport vector field evals vs. u:")
+@show sumvectorfielddiff(vs_evals, u_evals)
+println()
 
 ## prepare for plot.
 d_select = 1
