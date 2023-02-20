@@ -50,7 +50,7 @@ v0_set = collect( copy(u0) for _ = 1:N_parallel_vector_fields)
 ########### test DE expansion.
 T = Float64
 #h_initial = convert(T, NaN) # use default strategy to get h_intial for solving each solution piece.
-h_initial = one(T)
+
 
 ############ solve for piece-wise solution, then show it is C^{1} differentiable.
 
@@ -79,7 +79,6 @@ h_initial = one(T)
 
 ##### solve IVP with parallel transport.
 println("solveIVP, with parallel transport")
-ϵ = 1e-6
 config = PowerSeriesIVP.IVPConfig(
     Float64;
     ϵ = 1e-6,
@@ -98,7 +97,8 @@ sol = PowerSeriesIVP.solveIVP!(
     #h_initial,
     t_start,
     t_fin,
-    config,
+    config;
+    #checkconstraintsfunc = xx->false
 )
 
 # package up for analysis.

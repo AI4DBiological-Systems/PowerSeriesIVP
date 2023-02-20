@@ -42,8 +42,6 @@ Solve:
 ```julia
 import PowerSeriesIVP
 
-ϵ = 1e-6
-h_initial = 1.0
 config = PowerSeriesIVP.IVPConfig(
     Float64;
     ϵ = 1e-6,

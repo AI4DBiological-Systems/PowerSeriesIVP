@@ -290,7 +290,7 @@ function solveIVP!(
     t_start::T,
     t_fin::T,
     config::IVPConfig{T};
-    checkconstraintsfunc = tautology, # this function should return true if constraints are satisfied, given a `GeodesicEvaluation` data type is passed to it as input.
+    shouldstop = contradiction, # this function takes at least an input that is of type GeodesicEvaluation{T}, and returns true if we should stop simulating the forward trajectory of the IVP.
     ) where {MT<:MetricParams, PT<:ParallelTransportTrait, T}
 
     # set up.
@@ -334,7 +334,7 @@ function solveIVP!(
     )
 
     # check stopping condition
-    if t_next > t_fin || checkconstraintsfunc(next_conditions)
+    if t_next > t_fin || shouldstop(next_conditions)
         return sol
     end
 
@@ -363,7 +363,7 @@ function solveIVP!(
         )
     
         # check stopping condition.
-        if t_next > t_fin || checkconstraintsfunc(next_conditions)
+        if t_next > t_fin || shouldstop(next_conditions)
             return sol
         end
     
