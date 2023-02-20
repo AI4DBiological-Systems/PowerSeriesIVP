@@ -1,6 +1,7 @@
 
 struct IVPConfig{T}
     ϵ::T
+    h_initial::T
     L_test_max::Int
     r_order::T
     h_zero_error::T
@@ -9,7 +10,9 @@ struct IVPConfig{T}
 end
 
 function IVPConfig(
-    ϵ::T;
+    ::Type{T};
+    ϵ::T = convert(T, 1e-6),
+    h_initial = one(T),
     L_test_max::Int = convert(Int, 10),
     r_order = convert(T, 0.3),
     h_zero_error = convert(T, Inf),
@@ -17,7 +20,15 @@ function IVPConfig(
     max_pieces::Int = typemax(Int),
     ) where T
 
-    return IVPConfig(ϵ, L_test_max, r_order, h_zero_error, step_reduction_factor, max_pieces)
+    return IVPConfig(
+        convert(T, ϵ),
+        convert(T, h_initial),
+        convert(Int, L_test_max),
+        convert(T, r_order),
+        convert(T, h_zero_error),
+        convert(T, step_reduction_factor),
+        convert(Int, max_pieces),
+    )
 end
 
 struct GeodesicPiece{T}
@@ -51,10 +62,10 @@ function getNvars(c::GeodesicPiece)::Int
     return length(c.x)
 end
 
-struct PiecewiseTaylorPolynomial{T,PT<:GeodesicPiece}
+struct PiecewiseTaylorPolynomial{T}
 
     # [piece index]
-    coefficients::Vector{PT}
+    coefficients::Vector{GeodesicPiece{T}}
 
     # [piece index]
     expansion_points::Vector{T}
@@ -74,7 +85,7 @@ function getNtransports(A::PiecewiseTaylorPolynomial)
     return length(A.coefficients[begin].vs)
 end
 
-function getendtime(sol::PiecewiseTaylorPolynomial{T,DT})::T where {T,DT}
+function getendtime(sol::PiecewiseTaylorPolynomial{T})::T where T
     return sol.expansion_points[end] + sol.steps[end]
 end
 
@@ -202,7 +213,7 @@ end
 
 function evalsolution(
     pt_trait::PT,
-    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
+    A::PiecewiseTaylorPolynomial{T},
     t,
     )::Tuple{GeodesicEvaluation{T}, Bool} where {PT,T}
 
@@ -216,7 +227,7 @@ function batchevalsolution!(
     status_flags::BitVector,
     positions_buffer::Vector{Vector{T}},
     velocities_buffer::Vector{Vector{T}},
-    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
+    A::PiecewiseTaylorPolynomial{T},
     ts,
     ) where T
 
@@ -238,7 +249,7 @@ function batchevalsolution!(
     positions_buffer::Vector{Vector{T}}, # [eval_index][dimension].
     velocities_buffer::Vector{Vector{T}}, # [eval_index][dimension].
     vector_fields_buffer::Vector{Vector{Vector{T}}}, # [eval index][vector field index][dimension]
-    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
+    A::PiecewiseTaylorPolynomial{T},
     ts,
     ) where T
 
@@ -261,6 +272,13 @@ end
 
 ###################
 
+function tautology(args...)::Bool
+    return true
+end
+
+function contradiction(args...)::Bool
+    return false
+end
 
 # generate a piece-wise polynomials (seperately for each variable) that approximately solve an IVP of the form:
 # - starts at t = 0, stop at t = t_fin,
@@ -269,10 +287,10 @@ end
 function solveIVP!(
     prob_params::GeodesicIVPProblem{MT,T},
     pt_trait::PT,
-    h_initial::T,
     t_start::T,
     t_fin::T,
-    config::IVPConfig{T},
+    config::IVPConfig{T};
+    checkconstraintsfunc = tautology, # this function should return true if constraints are satisfied, given a `GeodesicEvaluation` data type is passed to it as input.
     ) where {MT<:MetricParams, PT<:ParallelTransportTrait, T}
 
     # set up.
@@ -312,12 +330,11 @@ function solveIVP!(
         prob,
         pt_trait,    
         t_expansion,
-        h_initial,
         config,
     )
 
     # check stopping condition
-    if t_next > t_fin
+    if t_next > t_fin || checkconstraintsfunc(next_conditions)
         return sol
     end
 
@@ -341,12 +358,12 @@ function solveIVP!(
             pt_trait,
             t_expansion,
             #sol.steps[end], # use the step from the last solution piece as the initial segment. actually, might not make sense for the geodesic setting, where extreme accuracy might not be needed.
-            h_initial, # more direct control over how large the step sizes could be. set this to be large to encourage taking a big step and high-order.
+            #h_initial, # more direct control over how large the step sizes could be. set this to be large to encourage taking a big step and high-order.
             config,
         )
     
         # check stopping condition.
-        if t_next > t_fin
+        if t_next > t_fin || checkconstraintsfunc(next_conditions)
             return sol
         end
     
@@ -379,13 +396,13 @@ function storesolutionpiece!(
     return nothing
 end
 
+# exits with next_conditions holding the solution evaluated at t_next = t_expansion + h.
 function solvesegmentIVP!(
     sol::PiecewiseTaylorPolynomial,
     next_conditions::GeodesicEvaluation{T},
     prob::GeodesicIVPBuffer,
     pt_trait::PT,
     t_expansion::T,
-    h_initial,
     config,
     ) where {PT<:ParallelTransportTrait,T}
 
@@ -394,7 +411,7 @@ function solvesegmentIVP!(
         prob,
         pt_trait;
         ϵ = config.ϵ,
-        h_initial = h_initial,
+        h_initial = config.h_initial,
         L_test_max = config.L_test_max,
         r_order = config.r_order,
         h_zero_error = config.h_zero_error,

@@ -1,5 +1,5 @@
 
-function extractcoefficients(sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}}) where T
+function extractcoefficients(sol::PiecewiseTaylorPolynomial{T}) where T
 
     c_x = collect( sol.coefficients[k].x for k in eachindex(sol.coefficients) )
     c_u = collect( sol.coefficients[k].u for k in eachindex(sol.coefficients) )

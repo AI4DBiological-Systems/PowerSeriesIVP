@@ -81,7 +81,9 @@ h_initial = one(T)
 println("solveIVP, with parallel transport")
 ϵ = 1e-6
 config = PowerSeriesIVP.IVPConfig(
-    ϵ;
+    Float64;
+    ϵ = 1e-6,
+    h_initial = 1.0,
     L_test_max = 10,
     r_order = 0.3,
     h_zero_error = Inf,
@@ -93,7 +95,7 @@ prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
 sol = PowerSeriesIVP.solveIVP!(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
-    h_initial,
+    #h_initial,
     t_start,
     t_fin,
     config,

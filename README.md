@@ -45,7 +45,9 @@ import PowerSeriesIVP
 ϵ = 1e-6
 h_initial = 1.0
 config = PowerSeriesIVP.IVPConfig(
-    ϵ;
+    Float64;
+    ϵ = 1e-6,
+    h_initial = 1.0,
     L_test_max = 10, # increase this for maximum higher-order power series.
     r_order = 0.3,
     h_zero_error = Inf,
@@ -58,7 +60,7 @@ sol = PowerSeriesIVP.solveIVP!(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
-    h_initial,
+    # h_initial,
     t_start,
     t_fin,
     config,
@@ -137,7 +139,7 @@ PyPlot.title("numerical solution, dim $d_select")
 
 To run a single query, do the following:
 ```julia
-T = eltype(x0)
+T = Float64
 t_select = 3 # index selected for this test, from the eval positions, t_viz.
 t = clamp(t_viz[t_select], t_start, t_fin)
 sol_eval = PowerSeriesIVP.GeodesicEvaluation(
