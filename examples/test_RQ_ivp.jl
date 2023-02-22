@@ -79,19 +79,19 @@ T = Float64
 
 ##### solve IVP with parallel transport.
 println("solveIVP, with parallel transport")
-config = PowerSeriesIVP.IVPConfig(
+config = PowerSeriesIVP.AdaptOrderConfig(
     Float64;
     ϵ = 1e-6,
-    h_initial = 1.0,
-    L_test_max = 10,
+    L_test_max = 10, # increase this for maximum higher-order power series.
     r_order = 0.3,
     h_zero_error = Inf,
     step_reduction_factor = 2.0,
-    max_pieces = 100000000,
+    max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
+    N_analysis_terms = 2,
 )
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
 prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
-sol = PowerSeriesIVP.solveIVP!(
+sol = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
     #h_initial,
@@ -100,6 +100,12 @@ sol = PowerSeriesIVP.solveIVP!(
     config;
     #checkconstraintsfunc = xx->false
 )
+
+orders = collect( length(sol.coefficients[i].x[begin]) for i in eachindex(sol.coefficients) )
+println("The min and max orders of the solution pieces:")
+@show minimum(orders), maximum(orders)
+
+println("The number of solution pieces: ", length(sol.coefficients))
 
 # package up for analysis.
 orders = collect( length(sol.coefficients[d].x[begin]) for d in eachindex(sol.coefficients) )
@@ -189,7 +195,7 @@ println("transport vector field evals vs. u:")
 println()
 
 ## prepare for plot.
-d_select = 1
+d_select = 3
 y_tb_viz = collect( y_toolbox[n][d_select] for n in eachindex(y_toolbox) )
 y_psm_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
 
@@ -277,7 +283,6 @@ println("check line against line_geodesic:")
 println()
 
 
-@assert 2==44
 
 ########### show C^{1} differentiable at piece boundaries.
 
@@ -288,8 +293,10 @@ struct EvalUTrait end
 function evalpiecewisesolAD(::Type{FT}, A::PowerSeriesIVP.PiecewiseTaylorPolynomial, t) where FT
 
     expansion_points = A.expansion_points
+    t_start = PowerSeriesIVP.getstarttime(A)
+    t_fin = PowerSeriesIVP.getendtime(A)
 
-    if !(A.t_start <= t <= A.t_fin)
+    if !(t_start <= t <= t_fin)
 
         return NaN
     end
@@ -341,17 +348,63 @@ end
 x_AD = tt->evalpiecewisesolAD(EvalXTrait, sol, tt)
 u_AD = tt->evalpiecewisesolAD(EvalUTrait, sol, tt)
 
-@assert 1==2
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, vs_evals, sol, t_viz)
+x_AD_viz = x_AD.(t_viz)
+discrepancies_x = collect( norm(x_AD_viz[i] - x_evals[i]) for i in eachindex(x_evals) )
+@assert sum(discrepancies_x) < eps(Float64)*10
+
+d_select = 3
+y_psm_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
+y_psm_AD_viz = collect( x_AD_viz[n][d_select] for n in eachindex(x_AD_viz) )
+
+# PyPlot.figure(fig_num)
+# fig_num += 1
+
+# PyPlot.plot(t_viz, y_psm_AD_viz, label = "AD")
+# PyPlot.plot(t_viz, y_psm_viz, label = "sol")
+
+# PyPlot.legend()
+# PyPlot.xlabel("time")
+# PyPlot.ylabel("discrepancy")
+# PyPlot.title("dim = $d_select")
+
+
 
 dx_AD = tt->collect( ForwardDiff.derivative(xx->(x_AD(xx)[d]), tt) for d = 1:N_vars )
 
 # sanity check. should be zero.
+println("sanity check on the AD implementation: should yield the same as initial conditions")
 @show norm( x_AD(t_start) - x0 )
 @show norm( u_AD(t_start) - u0 )
 println()
 
 t = t_start + 0.1
+println("derivative of position curve at t = $t:")
 @show norm( dx_AD(t) - u_AD(t) )
+
+t_tests = LinRange(t_start, PowerSeriesIVP.getendtime(sol) - 1e-12, 2000)
+discrepancies = collect( norm( dx_AD(t_tests[i]) - u_AD(t_tests[i]) ) for i in eachindex(t_tests) )
+@show sum(discrepancies)
+@show findmax(discrepancies)
+
+dx_AD(t_tests[849]) - u_AD(t_tests[849])
+
+
+
+PyPlot.figure(fig_num)
+fig_num += 1
+
+#PyPlot.plot(t_tests, discrepancies)
+#PyPlot.plot(t_viz, discrepancies_x)
+PyPlot.plot(t_viz, y_psm_AD_viz, label = "AD")
+PyPlot.plot(t_viz, y_psm_viz, label = "sol")
+
+PyPlot.xlabel("time")
+PyPlot.ylabel("discrepancy")
+PyPlot.title("dx vs. u, norm discrepancy")
+# It is strange that there is a spike in discrepancy near the middle.
+
+@assert 1==2
 
 println("t at an expansion point:")
 t = sol.expansion_points[3]
@@ -413,3 +466,20 @@ t = t0 + h
 @show dx_AD(t)
 @show u_func(t)
 
+
+
+
+############## root finding for affine constraint intersection.
+
+# I am here
+"""
+https://stackoverflow.com/questions/4505308/efficiently-determining-if-a-polynomial-has-a-root-in-the-interval-0-t
+if multiple roots in an interval, keep bisecting the interval until the theorm says only one root, nearest to the starting end point.
+
+repeat to find the intervals for each affine inequatity constraint.
+
+    take the earliest interval, then use bisection or ITP to find the only root.
+https://en.wikipedia.org/wiki/ITP_method
+
+
+"""

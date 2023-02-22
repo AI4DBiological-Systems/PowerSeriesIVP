@@ -45,72 +45,74 @@ struct EnableParallelTransport <: ParallelTransportTrait end
 #####
 
 abstract type GeodesicIVPBuffer end
+# sutypes of GeodesicIVPBuffer are defined in RQ22.jl
 
-#####
 
-struct RQ22ζ{T}
 
-    # stage 1
-    # delta::InterVariableDifference{T}
-    ## W4::ΔSumCol{T}
-    #Z8::ΔSumCol{T}
-    ## A::AddConstant{T}
-    # B::AddConstant{T}
-    # R::ScaledReciprocal{T}
+##### configs.
 
-    # stage 2
-    σ::Quotient{T} # v/B
-    Z0::Product{T} # η*σ
-    Z9::ΔSumColProduct{T}
+abstract type IVPConfig end
 
-    # stage 3
-    Z3::Product{T}
-    Z5::ΔSumColProduct{T}
-    Z1::SubtractFromScaled{T}
+# still adapts step.
+struct FixedOrderConfig{T} <: IVPConfig
+    ϵ::T
+    h_zero_error::T
+    L::Int
 
-    # stage 4
-    Z6::Product{T}
-    Z7::Product{T}
-    Z2::Addition{T}
-
-    # du/dt.
-    ζ::Product{T}
-    c::Vector{Vector{T}} # this is ζ.c, the coefficients for ζ.
-
-    # constants
-    a_sq::T
-    b_sq::T
-    a_sq_m_b_sq::T
+    # IVP-related
+    step_reduction_factor::T
+    max_pieces::Int
 end
 
-function RQ22ζ(a::T, b::T, N::Integer)::RQ22ζ{T} where T
-    @assert a > zero(T)
-    @assert b > zero(T)
+function FixedOrderConfig(
+    ::Type{T};
+    ϵ::Real = 1e-6,
+    h_zero_error::Real = Inf,
+    L::Integer = 10,
+    max_pieces::Integer = typemax(Int),
+    step_reduction_factor = 2,
+    ) where T
 
-    ζ = Product(T,N)
+    return FixedOrderConfig(
+        convert(T, ϵ),
+        convert(T, h_zero_error),
+        convert(Int, L),
+        convert(T, step_reduction_factor),
+        convert(Int, max_pieces),
+    )
+end
 
-    return RQ22ζ(
-        #ΔSumCol(T,N),
-        
-        # stage 2
-        Quotient(T,N),
-        Product(T,N),
-        ΔSumColProduct(T,N),
+# adapt order and step size.
+struct AdaptOrderConfig{T} <: IVPConfig
+    ϵ::T
+    L_test_max::Int
+    r_order::T
+    h_zero_error::T
+    N_analysis_terms::Int
 
-        # stage 3
-        Product(T,N),
-        ΔSumColProduct(T,N),
-        SubtractFromScaled(T,N),
+    # IVP-related
+    step_reduction_factor::T
+    max_pieces::Int
+end
 
-        # stage 4
-        Product(T,N),
-        Product(T,N),
-        Addition(T,N),
+function AdaptOrderConfig(
+    ::Type{T};
+    ϵ::T = convert(T, 1e-6),
+    L_test_max::Int = convert(Int, 10),
+    r_order = convert(T, 0.3),
+    h_zero_error = convert(T, Inf),
+    N_analysis_terms::Int = convert(Int, 2),
+    max_pieces::Integer = typemax(Int),
+    step_reduction_factor = 2,
+    ) where T
 
-        # du/dt.
-        ζ, ζ.c,
-
-        # constants.
-        a^2, b^2, a^2 - b^2,
+    return AdaptOrderConfig(
+        convert(T, ϵ),
+        convert(Int, L_test_max),
+        convert(T, r_order),
+        convert(T, h_zero_error),
+        convert(Int, N_analysis_terms),
+        convert(T, step_reduction_factor),
+        convert(Int, max_pieces),
     )
 end

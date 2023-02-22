@@ -178,12 +178,13 @@ prob = PowerSeriesIVP.getivpbuffer(
 
 h = PowerSeriesIVP.computetaylorsolution!(
     prob,
-    PowerSeriesIVP.DisableParallelTransport();
+    PowerSeriesIVP.DisableParallelTransport(),
+    h_initial;
     ϵ = convert(T, 1e-6),
-    h_initial = h_initial,
     L_test_max = 30,
     r_order = convert(T, 0.3),
     h_zero_error = convert(T, Inf),
+    N_analysis_terms = 2,
 )
 # just to be conservative. If we don't reduce h, it seems like as we increase the max order, the derivative of x won't agree with u at t0+h. I suspect because we've started to diverge somewhere between t=t0 to t=t0+h.
 h = h/2

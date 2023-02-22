@@ -42,19 +42,19 @@ Solve:
 ```julia
 import PowerSeriesIVP
 
-config = PowerSeriesIVP.IVPConfig(
+config = PowerSeriesIVP.AdaptOrderConfig(
     Float64;
     ϵ = 1e-6,
-    h_initial = 1.0,
     L_test_max = 10, # increase this for maximum higher-order power series.
-    r_order = 0.3,
+    r_order = 0.1,
     h_zero_error = Inf,
     step_reduction_factor = 2.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
+    N_analysis_terms = 2,
 )
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
 prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
-sol = PowerSeriesIVP.solveIVP!(
+sol = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
