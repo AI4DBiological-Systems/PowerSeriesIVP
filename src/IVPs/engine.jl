@@ -353,7 +353,6 @@ function solveIVP(
     return sol
 end
 
-# # I am here. reset, and mutate sol, and mutate next_conditions, and change shouldstop to use no args.
 # generate a piece-wise polynomials (seperately for each variable) that approximately solve an IVP of the form:
 # - starts at t = 0, stop at t = t_fin,
 # - h_initial used for adaption of the first polynomial.
@@ -376,7 +375,7 @@ function solveIVP!(
     # a = prob_params.a
     # b = prob_params.b
     metric_params = prob_params.metric_params
-    prob = getivpbuffer( # I am here. write update.
+    prob = getivpbuffer(
         metric_params,
         prob_params.x0,
         prob_params.u0,

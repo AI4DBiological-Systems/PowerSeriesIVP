@@ -86,6 +86,7 @@ end
 # eq:error_estimate
 function computeerror(c::Vector{T}, h::T, N_analysis_terms::Integer)::T where T
     L_analysis = length(c) - 1
+    #@show L_analysis, N_analysis_terms, 0
     @assert L_analysis > N_analysis_terms > 0
 
     L = L_analysis - N_analysis_terms
@@ -287,8 +288,9 @@ function applyadaptionstrategy!(
     fill!(err_record, Inf)
 
     ### get to a high enough order so that we can start computing the error.
-    # from the calling function, firstorder!() got prob.x and prob.u up to order 1 already. Start at order 2.
-    for _ = 2:N_analysis_terms
+    # from the calling function, firstorder!() got prob.x and prob.u up to order 1 already.
+    # start from 2, but make sure we have at least an extra order number to do order-adaption's error analysis. Look into this later.
+    for _ = 2:N_analysis_terms+1
         increaseorder!(prob, pt_trait)
     end
 

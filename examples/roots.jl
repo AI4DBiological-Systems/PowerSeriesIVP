@@ -118,4 +118,35 @@ println("The min and max orders of the solution pieces:")
 
 println("The number of solution pieces: ", length(sol.coefficients))
 
-########## 
+########## roots.
+
+c_cube = c[1:3]
+z1, z2, z3 = PowerSeriesIVP.solvecubicequation(c_cube)
+cubefunc = tt->(c[begin]+ c[begin+1]*tt + c[begin+2]*tt^2 + tt^3)
+
+@show cubefunc(z1), cubefunc(z2), cubefunc(z3)
+@show PowerSeriesIVP.isapproxreal(z1), PowerSeriesIVP.isapproxreal(z2), PowerSeriesIVP.isapproxreal(z3)
+println()
+
+"""
+graph of x^4 + 3*x^3 - 2*x^2 +4.3*x -3
+x == -3.85917 || x == 0.657164
+{x == 0.101001 +/- 1.08292 im}
+"""
+
+c_test = [-3; 4.3; -2; 3]
+z1, z2, z3, z4 = PowerSeriesIVP.solvequarticequation(c_test)
+@show z1, z2, z3, z4
+@show PowerSeriesIVP.isapproxreal(z1), PowerSeriesIVP.isapproxreal(z2), PowerSeriesIVP.isapproxreal(z3), PowerSeriesIVP.isapproxreal(z4)
+println()
+
+"""
+graph of x^4 - 0.1*x^3 - 2*x^2 +0.3*x +0.1
+x ≈ -1.4211 || x ≈ -0.16203 || x ≈ 0.31819 || x ≈ 1.36493
+"""
+
+c_test = [0.1; 0.3; -2; -0.1]
+z1, z2, z3, z4 = PowerSeriesIVP.solvequarticequation(c_test)
+@show z1, z2, z3, z4
+@show PowerSeriesIVP.isapproxreal(z1), PowerSeriesIVP.isapproxreal(z2), PowerSeriesIVP.isapproxreal(z3), PowerSeriesIVP.isapproxreal(z4)
+println()

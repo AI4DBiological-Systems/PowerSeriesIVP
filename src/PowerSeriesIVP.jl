@@ -14,6 +14,8 @@ include("./composite_funcs/quotient.jl")
 include("./composite_funcs/multivariate.jl")
 include("./composite_funcs/integral_seq.jl")
 
+include("./constraints/root_find.jl")
+
 include("./IVPs/types.jl")
 include("./IVPs/RQ22.jl")
 include("./IVPs/geodesic_engine.jl")
