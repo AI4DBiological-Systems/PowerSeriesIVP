@@ -1,37 +1,5 @@
-# root finding routine, based on Decartes rule of sign change.
 
-# I am here. utilize the endpoints of the intervals of the solution's coeff, instead of Taylor exp of the solution.
-# - the idea is to see if the IVP solution have roots, if it were atruncated Taylor polynomial. If there might be roots, then we use quartic order over this interval.
-# then write routine that loops this check over all constraints.
-# then write routine that resolves the current piece if there is a root.
-# - solve using order 4, then Budan interval val check. if might have root again, then solve using quartic.
-# Review Budan's theorem again.
-function Budanintervalcheck(
-    x::Vector{Vector{T}},
-    #as::Vector{Vector{T}},
-    #bs::Vector{T},
-    a::Vector{T},
-    b::T,
-    ) where T
-
-    @assert length(x) == length(as) == length(bs)
-
-    # out.position[d] = evaltaylor(c.x[d], t, a)
-    L_p1 = length(x[d][begin])
-    c = Vector{T}(undef, L_p1)
-
-    for l in eachindex(x[d][begin])
-        for d in eachindex(x)
-            c[l] = x[d][l]*a[d]
-        end
-    end
-    c[begin] -= b
-
-    # need Taylor shift.
-    # https://math.stackexchange.com/questions/694565/polynomial-shift
-
-    findfirstroot()
-end
+######### routines that solve univariate cubic and quartic polynomial equations.
 
 # http://numerical.recipes/book/book.html.
 """

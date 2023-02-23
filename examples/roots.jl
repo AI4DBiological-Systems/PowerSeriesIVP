@@ -150,3 +150,35 @@ z1, z2, z3, z4 = PowerSeriesIVP.solvequarticequation(c_test)
 @show z1, z2, z3, z4
 @show PowerSeriesIVP.isapproxreal(z1), PowerSeriesIVP.isapproxreal(z2), PowerSeriesIVP.isapproxreal(z3), PowerSeriesIVP.isapproxreal(z4)
 println()
+
+
+
+############### create affine constraints that intersect with path. then test the
+# intersection code.
+
+# I am here.
+
+
+# then write routine that resolves the current piece if there is a root.
+# - solve using order 4, then Budan interval val check. if might have root again, then solve using quartic.
+# Review Budan's theorem again.
+# mutates c_right.
+# x := t-t0, t0 is the expansion point of the Taylor polynomial c.
+# c[i] is the i-th order coefficient of a Taylor polynomial, i = 0, 1, 2, ..., L.
+# function getshiftedpolynomial!(
+#     c_shifted::Vector{T},
+#     x_shift::T,
+#     c::Vector{T},
+#     bino_mat::Matrix{Int},
+#     ) where T
+    
+#     L = length(c) - 1
+#     @assert size(bino_mat,1) >= L
+
+#     reisze!(c_shifted, length(c))
+#     updateshiftedpolynomial!(c_shifted, c, x_shift, zero(T), bino_buffer)
+
+#     return nothing
+# end
+# then write routine that loops this check over all constraints.
+

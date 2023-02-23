@@ -14,6 +14,7 @@ include("./composite_funcs/quotient.jl")
 include("./composite_funcs/multivariate.jl")
 include("./composite_funcs/integral_seq.jl")
 
+include("./constraints/Budan_bracket.jl")
 include("./constraints/root_find.jl")
 
 include("./IVPs/types.jl")

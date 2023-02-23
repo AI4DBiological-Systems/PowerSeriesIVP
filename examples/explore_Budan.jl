@@ -140,6 +140,7 @@ function makeshiftedcoefficients(c::Vector{T}, b, a) where T
     return out
 end
 
+# this is a version of makeshiftedcoefficients() that uses binomial coefficients.
 function updateshiftedpolynomial!(
     out::Vector{T},
     c::Vector{T},
@@ -159,7 +160,7 @@ function updateshiftedpolynomial!(
 
         out[m+1] = sum( c[n+1] * binomial_mat[n,m] * x^(n-m) for n = m:L )
     end
-    return out
+    return nothing
 end
 
 #z = t0+1.5
@@ -172,7 +173,8 @@ c_z = similar(c)
 updateshiftedpolynomial!(c_z, c, z, t0, bino_buffer)
 @assert norm(c_z0 - c_z) < 1e-12
 
-t = t0
+#t = t0
+t = randn()
 @show f(t + z)
 @show f_next(t0_next)
 
@@ -181,31 +183,26 @@ t = t0
 g1 = tt->evaltaylor(c_z, tt, 0.0)
 @show g1(t)
 
-@show norm(g1(t)-f(t+z))
-display([c c_z])
+# show numerically, that g1(t) is h(t+z).
+
+c_z2 = similar(c)
+updateshiftedpolynomial!(c_z2, c, z, 0.0, bino_buffer)
+g2 = tt->evaltaylor(c_z2, tt-t0, 0.0)
+
+h = tt->evaltaylor(c, tt-t0, 0.0)
+@show t, norm(g2(t)-h(t+z))
+@show -t, norm(g2(-t)-h(-t+z))
+println()
+
+println("[c c_z c_z2 c_next]")
+display([c c_z c_z2 c_next])
+
+@assert 1==43
+
 
 ############# zero test.
 
-function countsignflips(c::Vector{T})::Int where T
-    prev_sign = signbit(c[begin]) # true for negative sign.
-
-    N_flips = 0
-    for i in Iterators.drop(eachindex(c),1)
-        
-        current_sign = signbit(c[i])
-        
-        if prev_sign != current_sign
-            N_flips += 1
-            
-            prev_sign = current_sign
-        end
-    end
-
-    return N_flips
-end
-
-
-@show countsignflips(c_z)
+@show PowerSeriesIVP.countsignflips(c_z)
 
 
 ###### continuous x, u check.
@@ -217,40 +214,3 @@ display([c c_next])
 #evaltaylor(sol.coefficients[piece_select])
 orders = collect( length(sol.coefficients[i].x[begin]) for i in eachindex(sol.coefficients) )
 @show minimum(orders), maximum(orders)
-
-#### legacy: root isolation via Budan's theorem.
-# # https://www.youtube.com/watch?v=Yo-hmozR-tg
-# c = rev([2; -1; -4; -1; -6])
-# # returns whether there is 
-# # c is in order of: degree 0, degree 1, degree 2, ...
-# function findfirstroot(c::Vector{T}, t0::T, h::T; max_iters = 10000000) where T
-    
-#     t1 = t0
-#     t2 = t0 +h 
-
-#     c_t1 = makeshiftedcoefficients(c, t1, t0) # TODO make this mutating a pre-allocated buffer.
-#     c_t2 = makeshiftedcoefficients(c, t2, t0)
-
-#     N_roots_estimate = countsignflips(c_t1) - countsignflips(c_t2)
-#     if N_roots_estimate < 0
-#         println("Budan's theorem failed, problem in polynomial curve - halfspace detection.")
-#         return convert(T, NaN), convert(T, NaN), false
-#     end
-
-#     if N_roots_estimate > 1
-#         # div into 2, eval first half, if it is zero then eval second.
-#         t2_prev = t2
-#         t2 = (t1 + t2)/2
-        
-#     else
-#         if N_roots_estimate == 1
-#             # find this root.
-
-#         else
-#             # no root in the entire solution piece interval.
-#             return convert(T, NaN), convert(T, NaN), true
-#         end
-#     end
-
-#     return t1, t2
-# end
