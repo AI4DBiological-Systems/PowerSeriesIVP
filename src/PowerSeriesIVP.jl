@@ -22,6 +22,7 @@ include("./IVPs/utils.jl")
 
 include("./constraints/Budan_bracket.jl")
 include("./constraints/root_find.jl")
+include("./constraints/ITP.jl")
 
 end # module PowerSeriesIVP
 

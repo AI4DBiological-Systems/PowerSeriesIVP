@@ -228,7 +228,7 @@ function refinestep!(
     constraints::AffineConstraints{T},
     )::Tuple{T,Int} where T <: AbstractFloat
     
-    cs = A.coefficients
+    cs = A.intersection_coefficients
     all_roots = A.all_roots
     smallest_positive_roots = A.smallest_positive_roots
     atol = A.zero_tol

@@ -267,10 +267,11 @@ println()
 ############### intersection code.
 
 ###### shifted polynomial algorithm: set up test scenario.
-piece_select = 20
+piece_select = 17
 c_p = sol.coefficients[piece_select].x
 c_u = sol.coefficients[piece_select].u
 h = sol.steps[piece_select]
+t0 = sol.expansion_points[piece_select]
 
 c_p_next = sol.coefficients[piece_select+1].x
 c_u_next = sol.coefficients[piece_select+1].u
@@ -307,6 +308,47 @@ t_intersect, constraint_ind = PowerSeriesIVP.refinestep!(
 )
 @show h, t_intersect, constraint_ind, intersection_buf.smallest_positive_roots
 
+# assumes cs is already updated.
+
+t_ITP, ITP_status = PowerSeriesIVP.runITP(
+    intersection_buf.intersection_coefficients,
+    t0,
+    h,
+    PowerSeriesIVP.ITPConfig(Float64),
+)
+@show t_ITP, ITP_status
+println()
+
+# println("timing: runITP()")
+# @btime PowerSeriesIVP.runITP(
+#     intersection_buf.intersection_coefficients,
+#     t0,
+#     h,
+#     PowerSeriesIVP.ITPConfig(Float64),
+# )
+# println()
+# 3.658 μs (1 allocation: 48 bytes)
+
+cs = intersection_buf.intersection_coefficients
+
+PowerSeriesIVP.evaltaylor(cs[2], t_intersect-1e-3, 0.0)
+PowerSeriesIVP.evaltaylor(cs[2], t_intersect, 0.0)
+PowerSeriesIVP.evaltaylor(cs[2], t_intersect+1e-3, 0.0)
+
+x_lp = tt->collect( PowerSeriesIVP.evaltaylor(sol.coefficients[end].x[d], tt, sol.expansion_points[end]) for d = 1:N_vars )
+@show norm(x_evals[end]-x_lp(t_viz[end]))
+
+t_root = t_intersect
+t_root = 0.16852762022517737
+x_19 = tt->collect( PowerSeriesIVP.evaltaylor(sol.coefficients[19].x[d], tt, sol.expansion_points[19]) for d = 1:N_vars )
+p = x_19(t_root+t0)
+dot(as[1],p) - bs[1]
+dot(as[2],p) - bs[2] # very small!!
+
+@assert 5==4
+
+#### show all 4-th order intersection analysis for all peices.
+
 ts, constraint_inds = PowerSeriesIVP.searchintersection!(intersection_buf, sol, constraints)
 
 # the two intersections.
@@ -337,7 +379,10 @@ println()
 Q = sol.coefficients[budan_inds]
 Q[1].x
 
-# I am here. 
+######## find root via ITP.
+
+#PolynomialEvalParams()
+
 @assert 5==4
 
 ########## general root isolation. investigate in the future.

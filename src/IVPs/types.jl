@@ -127,7 +127,7 @@ struct AffineConstraints{T}
 end
 
 struct IntersectionBuffer{T<:AbstractFloat}
-    coefficients::Vector{Vector{T}} # [constraints][order]
+    intersection_coefficients::Vector{Vector{T}} # [constraints][order]
     all_roots::Vector{Complex{T}} # [order]
     smallest_positive_roots::Vector{T} # [constraints], real roots.
     zero_tol::T # for deciding wheather a complex number variable is a real number.
