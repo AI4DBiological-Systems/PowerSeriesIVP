@@ -2,23 +2,6 @@
 
 ### Budan's upper bound on the number of real roots of a polynomial equation on an interval.
 
-mutable struct BudanIntersectionBuffers{T}
-    # [constraints][order]
-    const cs::Vector{Vector{T}}
-    cs_left::Vector{Vector{T}}
-    cs_right::Vector{Vector{T}}
-    cs_center::Vector{Vector{T}}
-end
-
-function BudanIntersectionBuffers(cs::Vector{Vector{T}})::BudanIntersectionBuffers{T} where T
-    
-    return BudanIntersectionBuffers(
-        cs,
-        collect( cs[m] for m in eachindex(cs) ),
-        collect( cs[m] for m in eachindex(cs) ),
-        collect( cs[m] for m in eachindex(cs) ),
-    )
-end
 
 function allocatebuffer!(
     A::BudanIntersectionBuffers{T},
@@ -39,9 +22,9 @@ function allocatebuffer!(
         L_p1 = length(cs[m])
         @assert L == L_p1-1
     
-        reisze!(A.cs_left[m], L_p1)
-        reisze!(A.cs_right[m], L_p1)
-        reisze!(A.cs_center[m], L_p1)
+        resize!(A.cs_left[m], L_p1)
+        resize!(A.cs_right[m], L_p1)
+        resize!(A.cs_center[m], L_p1)
     end
 
     return nothing
@@ -53,7 +36,7 @@ function copybuffer!(x::Vector{Vector{T}}, src::Vector{Vector{T}}) where T
     resize!(x, length(src))
 
     for m in eachindex(x)
-        resize!(x, length(src[m]))
+        resize!(x[m], length(src[m]))
         for l in eachindex(x)
             x[m][l] = src[m][l]
         end
@@ -63,6 +46,7 @@ function copybuffer!(x::Vector{Vector{T}}, src::Vector{Vector{T}}) where T
 end
 
 
+################### Budan's theorem for smallest positive real root isolation.
 
 function setupbinomialcoefficients(order::Integer)::Matrix{Int}
     @assert order > 0
@@ -115,16 +99,79 @@ function updateshiftedpolynomial!(
     return nothing
 end
 
+# mutates A.
+function upperboundintersections!(
+    A::BudanIntersectionBuffers{T},
+    sol::PiecewiseTaylorPolynomial{T},
+    constraints,
+    bino_mat::Matrix{Int},
+    ) where T
+    
+    N_pieces = length(sol.coefficients)
+    @assert length(sol.steps) == N_pieces
+
+    ubs = Vector{T}(undef, N_pieces)
+    inds = Vector{Int}(undef, N_pieces)
+
+    for n in eachindex(sol.coefficients)
+
+        ubs[n], inds[n] = upperboundNroots!(
+            A,
+            sol.coefficients[n].x,
+            sol.steps[n],
+            constraints,
+            bino_mat,
+        )
+    end
+
+    return ubs, inds
+end
+
+
+# based on findfirstroot!()
+function upperboundNroots!(
+    A::BudanIntersectionBuffers{T},
+    x::Vector{Vector{T}},
+    h::T,
+    constraints::AffineConstraints{T},
+    bino_mat::Matrix{Int},
+    ) where T
+
+    updateintersectionpolynomial!(
+        A.cs, x, 
+        constraints.normals, constraints.offsets,
+    )
+
+    cs = A.cs
+    cs_right = A.cs_right
+
+    # initialize.
+    #copybuffer!(A.cs_left, A.cs)
+    #cs_left = A.cs_left
+    cs_left = cs
+    
+    x_right = h
+
+    # get shifted polynomial.
+    updateshiftedpolynomial!(cs_right, cs, x_right, zero(T), bino_mat)
+
+    max_val, max_ind = findmax( upperboundroots(cs_left[m], cs_right[m]) for m in eachindex(cs_left))
+    
+    return max_val, max_ind
+end
+
+
+# in development. not used for now.
 function findfirstroot!(
     A::BudanIntersectionBuffers{T},
     h::T,
     bino_mat::Matrix{Int};
-    stopping_len = 1e-4,
+    min_bracket_len = 1e-4,
     max_iters = 100000,
     ) where T
 
     # initialize.
-    allocatebuffer!(A, cs)
+    #allocatebuffer!(A, cs)
     copybuffer!(A.cs_left, A.cs)
 
     cs = A.cs
@@ -140,7 +187,7 @@ function findfirstroot!(
 
     max_val, max_ind = findmax( upperboundroots(cs_left[m], cs_right[m]) for m in eachindex(cs_left))
     if max_val < 0
-        return false # error! contracticts Budan's theorem.
+        return h, :redo_quartic # error! contracticts Budan's theorem. Redo this solution piece using quartic polynomials.
     end
 
     if max_val == 0
@@ -167,10 +214,10 @@ function findfirstroot!(
         cs_right,
         x_left,
         x_right,
-        x_center,
+        h,
         cs,
         bino_mat;
-        stopping_len = stopping_len,
+        min_bracket_len = min_bracket_len,
         max_iters = max_iters,
     )
     
@@ -184,10 +231,10 @@ function decideintersectionbracket!(
     cs_right::Vector{Vector{T}},
     x_left::T,
     x_right::T,
-    x_center::T,
+    x_ub::T,
     cs::Vector{Vector{T}},
     bino_mat::Matrix{Int};
-    stopping_len = stopping_len,
+    min_bracket_len = min_bracket_len,
     max_iters = max_iters,
     ) where T
 
@@ -196,7 +243,8 @@ function decideintersectionbracket!(
     # we hope to use explicit quartic root solve formula to get the intersection in the next solution piece.
 
     for _ = 1:max_iters
-    
+
+        x_center = (x_left+x_right)/2
         ub_roots, m_ind, region = splitquery!(
             cs_center,
             cs_left,
@@ -206,7 +254,7 @@ function decideintersectionbracket!(
             x_center,
             cs,
             bino_mat;
-            stopping_len = stopping_len,
+            min_bracket_len = min_bracket_len,
         )
 
         # see if we can attempt to solve for the root.
@@ -224,20 +272,32 @@ function decideintersectionbracket!(
             else
                 return x_left, :use_quartic_next
             end
-        end
+        
+
+        elseif ub_roots == 0
+            # this only happens if instructions == :right: see splitquery!()
+            
+            # no roots in the [x_left, x_right] interval.
+            if (x_ub - x_right) < min_bracket_len
+                return x_right, :continue_simulation
+            end
+
+            # next interval is: [x-right, x_ub].
+            x_left = x_right
+            x_right = x_ub
         
         # we shouldn't solve for the root, so we subdivide the interval further.
-        if region == :tol_reached
+        elseif region == :tol_reached
             # the region between [x_left, x_right] does not have Budan's root upperbound of 1
-            # but, the length of this region is smaller than stopping_len.
-            return x_left, :use_quartic_next
+            # but, the length of this region is smaller than min_bracket_len.
+            return x_right, :continue_simulation
 
         elseif region == :right
             x_left = x_center
-            cs_left, cs_center = cs_center, cs_left
+            #cs_left, cs_center = cs_center, cs_left
         else
             x_right = x_center
-            cs_right, cs_center = cs_center, cs_right
+            #cs_right, cs_center = cs_center, cs_right
         end
 
     end
@@ -252,9 +312,9 @@ function splitquery!(
     cs_left,
     cs_right,
     x_left, x_right, x_center, cs, bino_mat;
-    stopping_len = 1e-4)
+    min_bracket_len = 1e-4)
     
-    if abs(x_left-x_right) < stopping_len
+    if abs(x_left-x_right) < min_bracket_len
         return tol_reached
     end
 
@@ -302,34 +362,3 @@ function countsignflips(c::Vector{T})::Int where T
     return N_flips
 end
 
-
-######## prepare the intersection polynomials from the given Taylor polynomial x and the affine cosntraints as, bs.
-
-# mutates cs.
-# the intersection polynomial operate on the variable t-t0, t0 is the expansion point, a constant.
-function updateintersectionpolynomial!(
-    cs::Vector{Vector{T}}, # [constraints][order]
-    x::Vector{Vector{T}}, # [variable][order]
-    as::Vector{Vector{T}}, # [constraints][variable]
-    bs::Vector{T}, # [constraints]
-    ) where T
-
-    @assert length(as) == length(bs) == length(cs)
-    L_p1 = length(x[d][begin])
-
-    for m in eachindex(cs)
-        
-        resize!(cs[m], L_p1)
-        a = as[m]
-        b = bs[m]
-
-        for d in eachindex(x)
-            for l in eachindex(x[d])
-                cs[m][l] += x[d][l]*a[d]
-            end
-        end
-        cs[m][begin] -= b
-    end
-
-    return nothing
-end

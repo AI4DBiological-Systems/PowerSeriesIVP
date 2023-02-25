@@ -47,8 +47,6 @@ struct EnableParallelTransport <: ParallelTransportTrait end
 abstract type GeodesicIVPBuffer end
 # sutypes of GeodesicIVPBuffer are defined in RQ22.jl
 
-
-
 ##### configs.
 
 abstract type IVPConfig end
@@ -114,5 +112,50 @@ function AdaptOrderConfig(
         convert(Int, N_analysis_terms),
         convert(T, step_reduction_factor),
         convert(Int, max_pieces),
+    )
+end
+
+
+
+############# constraints
+
+struct PositiveRealTrait end
+
+struct AffineConstraints{T}
+    normals::Vector{Vector{T}}
+    offsets::Vector{T}
+end
+
+struct IntersectionBuffer{T<:AbstractFloat}
+    coefficients::Vector{Vector{T}} # [constraints][order]
+    all_roots::Vector{Complex{T}} # [order]
+    smallest_positive_roots::Vector{T} # [constraints], real roots.
+    zero_tol::T # for deciding wheather a complex number variable is a real number.
+end
+
+function IntersectionBuffer(zero_tol::T, order::Integer, N_constraints::Integer)::IntersectionBuffer{T} where T
+    return IntersectionBuffer(
+        collect( zeros(T, order) for _ = 1:N_constraints ),
+        Vector{Complex{T}}(undef, order),
+        Vector{T}(undef, N_constraints),
+        zero_tol,
+    )
+end
+
+struct BudanIntersectionBuffers{T}
+    # [constraints][order]
+    cs::Vector{Vector{T}}
+    cs_left::Vector{Vector{T}}
+    cs_right::Vector{Vector{T}}
+    cs_center::Vector{Vector{T}}
+end
+
+function BudanIntersectionBuffers(::Type{T}, N_constraints::Integer, order::Integer)::BudanIntersectionBuffers{T} where T
+    
+    return BudanIntersectionBuffers(
+        collect( zeros(T, order) for _ = 1:N_constraints ),
+        collect( zeros(T, order) for _ = 1:N_constraints ),
+        collect( zeros(T, order) for _ = 1:N_constraints ),
+        collect( zeros(T, order) for _ = 1:N_constraints ),
     )
 end

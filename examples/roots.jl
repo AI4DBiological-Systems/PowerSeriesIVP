@@ -26,22 +26,27 @@ N_parallel_vector_fields = 1
 ## set to same as u.
 v0_set = collect( rand(N_vars) for _ = 1:N_parallel_vector_fields)
 
+L_test_max = 10
+N_analysis_terms = 2
+L_max = L_test_max + N_analysis_terms
+
 adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
     Float64;
     #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
     ϵ = 1e-6,
-    L_test_max = 10, # increase this for maximum higher-order power series.
+    L_test_max = L_test_max, # increase this for maximum higher-order power series.
     r_order = 0.1,
     h_zero_error = Inf,
     step_reduction_factor = 2.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
-    N_analysis_terms = 2,
+    N_analysis_terms = N_analysis_terms,
 )
+Lm1_fixed = 3
 fixed_order_config = PowerSeriesIVP.FixedOrderConfig(
     Float64;
     #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
     ϵ = 1e-6,
-    L = 6, # increase this for maximum higher-order power series.
+    L = Lm1_fixed, # actual order is L+1.
     h_zero_error = Inf,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
 )
@@ -61,6 +66,21 @@ sol = PowerSeriesIVP.solveIVP(
     h_initial = 1.0
 )
 
+# @btime PowerSeriesIVP.solveIVP(
+#     prob_params,
+#     PowerSeriesIVP.EnableParallelTransport(),
+#     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
+#     # h_initial,
+#     t_start,
+#     t_fin,
+#     config;
+#     h_initial = 1.0
+# );
+# @assert 1==2
+# # 1.995 ms (21716 allocations: 3.17 MiB) using adaptive config.
+# # 24.307 ms (419958 allocations: 29.75 MiB) using 4th order.
+
+config2 = adaptive_order_config
 prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, 2 .* u0, v0_set)
 sol2 = PowerSeriesIVP.solveIVP(
     prob_params,
@@ -72,6 +92,12 @@ sol2 = PowerSeriesIVP.solveIVP(
     config;
     h_initial = 1.0
 )
+
+orders = collect( length(sol.coefficients[i].x[begin]) for i in eachindex(sol.coefficients) )
+println("The min and max orders of the solution pieces:")
+@show minimum(orders), maximum(orders)
+
+println("The number of solution pieces: ", length(sol.coefficients))
 
 #### visualize trajectory.
 
@@ -139,7 +165,7 @@ if as[2][end] > 0
     as[2] = -as[2]
     bs[2] = -bs[2]
 end
-
+constraints = PowerSeriesIVP.AffineConstraints(as, bs)
 
 x1_range = LinRange(-20, 20, 20)
 x2_range = LinRange(-20, 20, 20)
@@ -202,65 +228,12 @@ PyPlot.xlabel("x1")
 PyPlot.ylabel("x2")
 PyPlot.title("trajectory x1, x2")
 
-@show norm(x_evals[1] - x0)
-@show norm(y_evals[1] - x0)
 
-@assert 1==432
+########## test root solving code. Cubic and quartic euqations.
 
-###### test up test scenario.
-piece_select = 29
-c_p = sol.coefficients[piece_select].x
-c_u = sol.coefficients[piece_select].u
-
-c_p_next = sol.coefficients[piece_select+1].x
-c_u_next = sol.coefficients[piece_select+1].u
-
-N_constraints = 5
-as = collect( randn(N_vars) for _ = 1:N_constraints )
-bs = randn(N_constraints)
-
-constraint_select = 3
-a = as[constraint_select]
-b = bs[constraint_select]
-
-##########
-
-# get the polynomial equation.
-c = sum( a[d] .* c_p[d] for d in eachindex(a) )
-c[begin] += b
-
-c_next = sum( a[d] .* c_p_next[d] for d in eachindex(a) )
-c_next[begin] += b
-
-## taylor polynomial for shifted version.
-
-function evaltaylor(c::Vector, x, a)
-    τ = x-a
-    return sum( c[i]*τ^(i-1) for i in eachindex(c) )
-end
-
-L_p1 = length(c_p[begin])
-
-t0 = sol.expansion_points[piece_select]
-h = sol.steps[piece_select]
-
-t0_next = sol.expansion_points[piece_select+1]
-
-#evaltaylor(c, t, t0)
-f = tt->evaltaylor(c, tt, t0)
-f_next = tt->evaltaylor(c_next, tt, t0_next)
-
-orders = collect( length(sol.coefficients[i].x[begin]) for i in eachindex(sol.coefficients) )
-println("The min and max orders of the solution pieces:")
-@show minimum(orders), maximum(orders)
-
-println("The number of solution pieces: ", length(sol.coefficients))
-
-########## roots.
-
-c_cube = c[1:3]
+c_cube = randn(3)
 z1, z2, z3 = PowerSeriesIVP.solvecubicequation(c_cube)
-cubefunc = tt->(c[begin]+ c[begin+1]*tt + c[begin+2]*tt^2 + tt^3)
+cubefunc = tt->(c_cube[begin]+ c_cube[begin+1]*tt + c_cube[begin+2]*tt^2 + tt^3)
 
 @show cubefunc(z1), cubefunc(z2), cubefunc(z3)
 @show PowerSeriesIVP.isapproxreal(z1), PowerSeriesIVP.isapproxreal(z2), PowerSeriesIVP.isapproxreal(z3)
@@ -291,10 +264,117 @@ println()
 
 
 
-############### create affine constraints that intersect with path. then test the
-# intersection code.
+############### intersection code.
 
-#BudanIntersectionBuffers()
+###### shifted polynomial algorithm: set up test scenario.
+piece_select = 20
+c_p = sol.coefficients[piece_select].x
+c_u = sol.coefficients[piece_select].u
+h = sol.steps[piece_select]
+
+c_p_next = sol.coefficients[piece_select+1].x
+c_u_next = sol.coefficients[piece_select+1].u
+
+# N_constraints = 5
+# as = collect( randn(N_vars) for _ = 1:N_constraints )
+# bs = randn(N_constraints)
+
+constraint_select = 2
+a = as[constraint_select]
+b = bs[constraint_select]
+
+
+########## general root isolation. investigate in the future.
+
+L = Lm1_fixed + 1
+T = Float64
+
+
+all_roots = Vector{Complex{T}}(undef, L)
+smallest_positive_roots = Vector{T}(undef, N_constraints) # real roots.
+
+
+
+complex_zero_tol = 1e-8
+intersection_buf = PowerSeriesIVP.IntersectionBuffer(complex_zero_tol, L, N_constraints)
+
+
+t_intersect, constraint_ind = PowerSeriesIVP.refinestep!(
+    intersection_buf,
+    c_p,
+    h,
+    constraints,
+)
+@show h, t_intersect, constraint_ind, intersection_buf.smallest_positive_roots
+
+ts, constraint_inds = PowerSeriesIVP.searchintersection!(intersection_buf, sol, constraints)
+
+# the two intersections.
+pieces = findall(xx->xx>0, constraint_inds)
+@show pieces
+
+t1 = ts[pieces[1]]
+a1 = as[constraint_inds[pieces[1]]]
+
+t2 = ts[pieces[2]]
+a2 = as[constraint_inds[pieces[2]]]
+
+
+
+### Budan bound.
+root_ub_buf = PowerSeriesIVP.BudanIntersectionBuffers(Float64, N_constraints, L)
+bino_mat = PowerSeriesIVP.setupbinomialcoefficients(L_max)
+
+ubs, ubs_inds = PowerSeriesIVP.upperboundintersections!(root_ub_buf, sol, constraints, bino_mat)
+
+budan_inds = findall(xx->xx>0, ubs)
+println("[budan_inds ubs[budan_inds]]")
+display([budan_inds ubs[budan_inds]])
+println()
+
+@show issubset(pieces, budan_inds) # should be true if Budan's upperbound works.
+
+Q = sol.coefficients[budan_inds]
+Q[1].x
+
+# I am here. 
+@assert 5==4
+
+########## general root isolation. investigate in the future.
+# implementation in Budan_bracket.jl
+
+T = Float64
+cs = Vector{Vector{T}}(undef, length(as))
+root_bracket = PowerSeriesIVP.BudanIntersectionBuffers(cs)
+
+bino_mat = PowerSeriesIVP.setupbinomialcoefficients(L_max)
+
+# mutates cs, root_bracket
+function postprocesspiece!(
+    cs::Vector{Vector{T}},
+    root_bracket::BudanIntersectionBuffers{T},
+    c_lb::Vector{Vector{T}},
+    h::T,
+    as::Vector{Vector{T}},
+    bs::Vector{T},
+    ) where T
+
+    # get the polynomial equation.
+    PowerSeriesIVP.updateintersectionpolynomial!(cs, c_lb, as, bs)
+    #root_bracket = PowerSeriesIVP.BudanIntersectionBuffers(cs)
+    PowerSeriesIVP.allocatebuffer!(root_bracket, cs)
+
+    # figure out if there is a root from x ∈ [0, h] for the current polynomials cs.
+    new_h, instruction = PowerSeriesIVP.findfirstroot!(
+        root_bracket,
+        h,
+        bino_mat;
+        min_bracket_len = 1e-4,
+        max_iters = 100000,
+    )
+end
+
+
 
 
 # then write routine that resolves the current piece if there is a root.
