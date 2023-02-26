@@ -24,6 +24,9 @@ include("./constraints/Budan_bracket.jl")
 include("./constraints/root_find.jl")
 include("./constraints/ITP.jl")
 
+ # front end for refining step in the constrained IVP case.
+include("./constraints/intersection.jl")
+
 end # module PowerSeriesIVP
 
 # # Nomenclature

@@ -83,76 +83,140 @@ end
 
 ###### adaptive step
 
-# eq:error_estimate
-function computeerror(c::Vector{T}, h::T, N_analysis_terms::Integer)::T where T
-    L_analysis = length(c) - 1
-    #@show L_analysis, N_analysis_terms, 0
-    @assert L_analysis > N_analysis_terms > 0
+# eq:error_estimate backup.
+# function computeerror(
+#     c::Vector{T},
+#     h::T,
+#     N_analysis_terms::Integer,
+#     )::T where T
 
-    L = L_analysis - N_analysis_terms
+#     L_analysis = length(c) - 1
+#     #@show L_analysis, N_analysis_terms, 0
+#     @assert L_analysis > N_analysis_terms > 0
 
-    return abs(sum( c[begin+n]*h^(n-1) for n = (L+1):L_analysis ))
-end
+#     L = L_analysis - N_analysis_terms
 
-# function computesumerror(cs::Vector{Vector{T}}, h::T, N_analysis_terms::Integer)::T where T
-    
-#     total_err = zero(T)
-#     for d in eachindex(cs)
-        
-#         total_err += computeerror(cs[d], h, N_analysis_terms)
-#     end
-
-#     return total_err
+#     return abs(sum( c[begin+n]*h^(n-1) for n = (L+1):L_analysis ))
 # end
 
-function computemaxerror(
-    cs::Vector{Vector{T}},
+# This is E(M,h) in my notes.
+function computeerror(
+    c::Vector{T},
     h::T,
+    L::Integer,
     N_analysis_terms::Integer,
-    ) where T
-    
-    max_error = convert(T, -Inf)
-    ind = 1 # at least a default valid index, in case all computed errors are -Inf.
+    )::T where T
 
-    for d in eachindex(cs)
-        current_error = computeerror(cs[d], h, N_analysis_terms)
+    order = length(c) - 1
+    @assert order > N_analysis_terms > 0
 
-        if current_error > max_error
-            ind = d
-            max_error = current_error
-        end
-    end
+    L = order - N_analysis_terms
 
-    return max_error, ind
+    return abs(sum( c[begin+n]*h^(n-1) for n = (L+1):order ))
 end
 
-function computemaxerror!(
-    error_buffer::Vector{T},
+# based on sum error formula in my notes.
+function computeerrorratio(
     cs::Vector{Vector{T}},
-    h::T,
-    N_analysis_terms::Integer,
-    ) where T
+    N_analysis_terms::Integer;
+    h_zero_error = Inf,
+    step_reduction_factor = 2,
+    )::T where T
     
-    resize!(error_buffer, length(cs))
+    order = length(cs[begin])
+    @assert order > N_analysis_terms > 0
 
+    M = order - N_analysis_terms
+    
+    a = choosestepsize(
+        ϵ,
+        cs;
+        order = M,
+        h_zero_error = h_zero_error,
+        step_reduction_factor = step_reduction_factor,
+    )
+
+    b = choosestepsize(
+        ϵ,
+        cs;
+        order = M-1,
+        h_zero_error = h_zero_error,
+        step_reduction_factor = step_reduction_factor,
+    )
+
+    numerator = zero(T)
+    denominator = zero(T)
     for d in eachindex(cs)
-        error_buffer[d] = computeerror(cs[d], h, N_analysis_terms)
+        
+        c = cs[d]
+
+        numerator += abs(sum( c[begin+M+n]*a^(n-1) for n = 1:N_analysis_terms ))
+        denominator += abs(sum( c[begin+M-1+n]*b^(n-1) for n = 1:N_analysis_terms ))
     end
+    error_ratio = (numerator*a^M)/(denominator*b^(M-1))
 
-    max_error, ind = findmax(error_buffer)
-
-    return max_error, ind
+    return error_ratio
 end
+
+# function computemaxerror(
+#     cs::Vector{Vector{T}},
+#     h::T,
+#     N_analysis_terms::Integer,
+#     ) where T
+    
+#     max_error = convert(T, -Inf)
+#     ind = 1 # at least a default valid index, in case all computed errors are -Inf.
+
+#     for d in eachindex(cs)
+#         current_error = computeerror(cs[d], h, N_analysis_terms)
+
+#         if current_error > max_error
+#             ind = d
+#             max_error = current_error
+#         end
+#     end
+
+#     return max_error, ind
+# end
+
+# function computemaxerror!(
+#     error_buffer::Vector{T},
+#     cs::Vector{Vector{T}},
+#     h::T,
+#     N_analysis_terms::Integer,
+#     ) where T
+    
+#     resize!(error_buffer, length(cs))
+
+#     for d in eachindex(cs)
+#         error_buffer[d] = computeerror(cs[d], h, N_analysis_terms)
+#     end
+
+#     max_error, ind = findmax(error_buffer)
+
+#     return max_error, ind
+# end
 
 # eq:choose_ODE_step_size. An h_zero_error of Inf means if no higher-order errors are computed, then we assume the model is exact, thus any step is valid. This means the maximum step for which the Taylor polynomial is valid is Inf.
-function choosestepsize(ϵ::T, c::Vector{T}; h_zero_error::T = convert(T,Inf))::T where T
-    L = length(c) - 1
-    h = stepsizeformula(ϵ, c[end], L)
+function choosestepsize(
+    ϵ::T,
+    c::Vector{T};
+    h_zero_error = Inf,
+    step_reduction_factor = 2,
+    order = length(c) -1,
+    )::T where T
+
+    L = order
+    total_order = length(c) - 1
+    @assert 0 < L <= total_order
+    
+    h = stepsizeformula(ϵ, c[begin+L], L)
     if isfinite(h)
-        return h
+        # further shorten step size as a heuristic strategy to reduce error.
+        return convert(T, h/step_reduction_factor)
     end
 
-    return h_zero_error
+    return convert(T, h_zero_error/step_reduction_factor)
 end
 
 # we hardcoded such that only one analysis term for the step size determination.
@@ -160,89 +224,28 @@ function stepsizeformula(ϵ::T, x::T, L::Integer)::T where T
     return (abs(ϵ/(2*x)))^(1/(L-1))
 end
 
-# take care of constraints in the piece-wise solution part, not this inner routine for an individual Taylor solution.
-# final order is N_analysis_terms + L_test.
-# Some functions at particular exapnsion points have Taylor series with vanishing coefficients. Example: https://www.wolframalpha.com/input?i=taylor+expansion+of+%281%2Bx%5E4%29%2F%282%2Bx%5E4%29&key=33rzp
-# - N_analysis_terms > 1 attempts to mitigate this issue.
-# - Since N_analysis_terms cannot be infinite, use h_zero_error to guard the case when zero estimated error is detected. h_zero_error = Inf means no guard, and that zero error means the solution polynomial is exactly the solution of the DE.
-# function computetaylorsolution!(
-#     prob::GeodesicIVPBuffer,
-#     pt_trait::PT,
-#     h_initial::T;
-#     ϵ::T = convert(T, 1e-6),
-#     L_test_max::Integer = 10,
-#     r_order::T = convert(T, 0.3),
-#     h_zero_error::T = convert(T, Inf),
-#     N_analysis_terms = 2, # make larger than 2 if the solution has many consecutive vanishing Taylor coefficients for certain orders.
-#     ) where {PT,T}
+function choosestepsize(
+    ϵ::T,
+    c_x::Vector{Vector{T}};
+    order = length(c_x[begin])-1,
+    h_zero_error = Inf,
+    step_reduction_factor = 2,
+    )::T where T
 
-#     ### set up
-    
-#     p = prob
-#     error_threshold = ϵ/2
+    min_h = convert(T, Inf)
+    for d in eachindex(c_x)
+        h = choosestepsize(
+            ϵ,
+            c_x[d];
+            h_zero_error = h_zero_error,
+            step_reduction_factor = step_reduction_factor,
+            order = order,
+        )
+        min_h = min(min_h, h)
+    end
 
-#     err_record = ones(T, L_test_max) # first entry is for 1st-order, so on.
-#     fill!(err_record, Inf)
-
-#     # intermediate buffers.
-#     N_vars = length(prob.x0)
-#     error_across_variables = Vector{T}(undef, N_vars)
-
-#     ### get the highest compute order N_analysis_terms + 1. The +1 is since we want a minimum of a 1-st order (line) solution.
-#     getfirstorder!(prob, pt_trait)
-    
-#     ### get to a high enough order so that we can start computing the error.
-#     for _ = 1:N_analysis_terms
-#         increaseorder!(prob, pt_trait)
-#     end
-
-#     # are we using the default initial h?
-#     h = h_initial
-#     if !isfinite(h)
-#         # use the following heurestic in this if-block for initial h:
-
-#         # use the first (arb. chosen) variable to analyze how far to step.
-#         expansion_factor = 100.0 # hard code for now.
-#         h = choosestepsize(ϵ, p.x.c[begin]; h_zero_error = h_zero_error)*expansion_factor
-#     end
-
-#     # error for the l-th order.
-#     #err_record[begin] = computeerror(p.x.c, h, N_analysis_terms)
-
-#     error_val, error_var_ind = computemaxerror!(error_across_variables, p.x.c, h, N_analysis_terms)
-#     err_record[begin] = error_val
-
-#     if error_val < error_threshold
-
-#         # error is already tolerable. no need for adaptation. find step and exit.
-#         return choosestepsize(ϵ, p.x.c[error_var_ind]; h_zero_error = h_zero_error)
-#     end
-    
-
-#     ### start adaption strategy.
-#     for l = (1+N_analysis_terms):L_test_max # l is L_test
-#         # increase order.
-#         increaseorder!(prob, pt_trait)
-
-#         #err_record[l] = computeerror(p.x.c, h, N_analysis_terms) # error for 1st-order solution.
-#         error_val, error_var_ind = computemaxerror!(error_across_variables, p.x.c, h, N_analysis_terms)
-        
-#         # eq:sufficient_error_reduction_order, eq:error_threshold_condition
-#         shrink_change = err_record[l]/err_record[l-1]
-
-#         if error_val < error_threshold || shrink_change < r_order
-        
-#             # Stop increasing the order. Use highest computed order coefficient to get step size.
-#             return choosestepsize(ϵ, p.x.c[error_var_ind]; h_zero_error = h_zero_error)
-#         end
-
-#         err_record[l] = error_val # book keep.
-#     end
-
-#     # Reached max order. Use highest computed order coefficient to get step size.
-#     return choosestepsize(ϵ, p.x.c[error_var_ind]; h_zero_error = h_zero_error)
-# end
-
+    return min_h
+end
 
 function applyadaptionstrategy!(
     prob::GeodesicIVPBuffer,
@@ -262,7 +265,11 @@ function applyadaptionstrategy!(
     
     error_val, error_var_ind = computemaxerror(prob.x.c, h_test, 1)
     
-    return choosestepsize(config.ϵ, prob.x.c[error_var_ind]; h_zero_error = config.h_zero_error)
+    return choosestepsize(
+        config.ϵ,
+        prob.x.c[error_var_ind];
+        h_zero_error = config.h_zero_error,
+        step_reduction_factor = config.step_reduction_factor)
 end
 
 
@@ -276,10 +283,12 @@ function applyadaptionstrategy!(
     ### set up
     
     ϵ = config.ϵ
-    L_test_max = config.L_test_max
+    L_min = config.L_min
+    L_max = config.L_max
     r_order = config.r_order
     h_zero_error = config.h_zero_error
     N_analysis_terms = config.N_analysis_terms
+    step_reduction_factor = config.step_reduction_factor
     p = prob
 
     error_threshold = ϵ/2
@@ -290,54 +299,69 @@ function applyadaptionstrategy!(
     ### get to a high enough order so that we can start computing the error.
     # from the calling function, firstorder!() got prob.x and prob.u up to order 1 already.
     # start from 2, but make sure we have at least an extra order number to do order-adaption's error analysis. Look into this later.
-    for _ = 2:N_analysis_terms+1
+    for _ = 2:L_max
         increaseorder!(prob, pt_trait)
     end
 
-    # are we using the default initial h?
-    h = h_initial
-    if !isfinite(h)
-        # use the following heurestic in this if-block for initial h:
+    # start to decide if we should exit.
+    h = choosestepsize(
+        ϵ,
+        p.x.c;
+        h_zero_error = h_zero_error,
+        step_reduction_factor = step_reduction_factor,
+    )
 
-        # use the first (arb. chosen) variable to analyze how far to step.
-        expansion_factor = 100.0 # hard code for now.
-        h = choosestepsize(ϵ, p.x.c[begin]; h_zero_error = h_zero_error)*expansion_factor
-    end
-
-    # error for the l-th order.
-    #err_record[begin] = computeerror(p.x.c, h, N_analysis_terms)
-
-    #error_val, error_var_ind = computemaxerror!(error_across_variables, p.x.c, h, N_analysis_terms)
-    error_val, error_var_ind = computemaxerror(prob.x.c, h, N_analysis_terms)
-    err_record[begin] = error_val
-
-    if error_val < error_threshold
-
-        # error is already tolerable. no need for adaptation. find step and exit.
-        return choosestepsize(ϵ, p.x.c[error_var_ind]; h_zero_error = h_zero_error)
+    if checkroots()
+        return h
     end
     
 
     ### start adaption strategy.
+    h_prev = h
+
     for l = (1+N_analysis_terms):L_test_max # l is L_test
         # increase order.
         increaseorder!(prob, pt_trait)
 
-        #error_val, error_var_ind = computemaxerror!(error_across_variables, p.x.c, h, N_analysis_terms)
-        error_val, error_var_ind = computemaxerror(prob.x.c, h, N_analysis_terms)
+        h = choosestepsize(
+            ϵ,
+            p.x.c;
+            h_zero_error = h_zero_error,
+            step_reduction_factor = step_reduction_factor,
+        )
 
-        # eq:sufficient_error_reduction_order, eq:error_threshold_condition
-        shrink_change = err_record[l]/err_record[l-1]
+        x_right, status = checkroots()
 
-        if error_val < error_threshold || shrink_change < r_order
+        if status == :one_root
+            
+            h_new = runITP()
+            return h_new
         
-            # Stop increasing the order. Use highest computed order coefficient to get step size.
-            return choosestepsize(ϵ, p.x.c[error_var_ind]; h_zero_error = h_zero_error)
+        elseif status == :no_root
+
+            # do nothing.
+        else 
+            # the inconclusive case and unexpected error case, like root solve failed.
+
+            decreaseorder!()
+
+            return h_prev
         end
 
-        err_record[l] = error_val # book keep.
+        # I am here. see current_notes under `root find` folder.
+        r = computeerrorratio(
+            cs,
+            N_analysis_terms;
+            h_zero_error = h_zero_error,
+            step_reduction_factor = step_reduction_factor,
+        )
+
+        if r < r_order
+            return h
+        end
+
+        h_prev = h
     end
 
-    # Reached max order. Use highest computed order coefficient to get step size.
-    return choosestepsize(ϵ, p.x.c[error_var_ind]; h_zero_error = h_zero_error)
+    return h
 end

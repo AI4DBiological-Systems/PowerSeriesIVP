@@ -41,7 +41,7 @@ adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
     N_analysis_terms = N_analysis_terms,
 )
-Lm1_fixed = 3
+Lm1_fixed = 4
 fixed_order_config = PowerSeriesIVP.FixedOrderConfig(
     Float64;
     #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
@@ -51,8 +51,8 @@ fixed_order_config = PowerSeriesIVP.FixedOrderConfig(
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
 )
 
-config = adaptive_order_config
-#config = fixed_order_config
+#config = adaptive_order_config
+config = fixed_order_config
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
 prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
 sol = PowerSeriesIVP.solveIVP(
@@ -93,7 +93,7 @@ sol2 = PowerSeriesIVP.solveIVP(
     h_initial = 1.0
 )
 
-orders = collect( length(sol.coefficients[i].x[begin]) for i in eachindex(sol.coefficients) )
+orders = collect( PowerSeriesIVP.getorder(sol.coefficients[i]) for i in eachindex(sol.coefficients) )
 println("The min and max orders of the solution pieces:")
 @show minimum(orders), maximum(orders)
 
@@ -345,7 +345,7 @@ p = x_19(t_root+t0)
 dot(as[1],p) - bs[1]
 dot(as[2],p) - bs[2] # very small!!
 
-@assert 5==4
+
 
 #### show all 4-th order intersection analysis for all peices.
 
@@ -353,7 +353,7 @@ ts, constraint_inds = PowerSeriesIVP.searchintersection!(intersection_buf, sol, 
 
 # the two intersections.
 pieces = findall(xx->xx>0, constraint_inds)
-@show pieces
+#@show pieces
 
 t1 = ts[pieces[1]]
 a1 = as[constraint_inds[pieces[1]]]
@@ -385,38 +385,92 @@ Q[1].x
 
 @assert 5==4
 
-########## general root isolation. investigate in the future.
-# implementation in Budan_bracket.jl
 
-T = Float64
-cs = Vector{Vector{T}}(undef, length(as))
-root_bracket = PowerSeriesIVP.BudanIntersectionBuffers(cs)
-
-bino_mat = PowerSeriesIVP.setupbinomialcoefficients(L_max)
 
 # mutates cs, root_bracket
-function postprocesspiece!(
-    cs::Vector{Vector{T}},
-    root_bracket::BudanIntersectionBuffers{T},
-    c_lb::Vector{Vector{T}},
-    h::T,
-    as::Vector{Vector{T}},
-    bs::Vector{T},
+function postprocessstep!(
+    A::BudanIntersectionBuffers{T},
+    sol_piece::GeodesicPiece{T},
+    x_right::T,
+    constraints::AffineConstraints{T},
+    bino_mat::Matrix{Int};
+    allow_reduce_step = false,
     ) where T
+    
+    # the left boundary is the piece's expansion point.
+    cs = A.cs
+    cs_left = cs
+    #x_left = zero(T)
 
-    # get the polynomial equation.
-    PowerSeriesIVP.updateintersectionpolynomial!(cs, c_lb, as, bs)
-    #root_bracket = PowerSeriesIVP.BudanIntersectionBuffers(cs)
-    PowerSeriesIVP.allocatebuffer!(root_bracket, cs)
+    if x_right <= zero(T)
+        return :error_received_non_positive_step
+    end
 
-    # figure out if there is a root from x ∈ [0, h] for the current polynomials cs.
-    new_h, instruction = PowerSeriesIVP.findfirstroot!(
-        root_bracket,
-        h,
-        bino_mat;
-        min_bracket_len = 1e-4,
-        max_iters = 100000,
+    if getorder(sol_piece) <= 4
+        out = getexplicitstep(sol_piece)
+        return out
+    end
+
+    # store the intersection polynomial equations in cs.
+    updateintersectionpolynomials!(
+        cs, sol_piece.x, 
+        constraints.normals, constraints.offsets,
     )
+
+    # get shifted polynomial.
+    cs_right = A.cs_right
+    updateshiftedpolynomial!(cs_right, cs, x_right, zero(T), bino_mat)
+
+    # upper bound.
+    min_x = x_right
+    success_exit_tag = :continue_simulation
+
+    for m in eachindex(cs_left)
+        ub_m = upperboundroots(cs_left[m], cs_right[m])
+
+        # when Budan's theorem doesn't work.
+        if ub_m < 0
+            return -one(T), :reduce_order # this case shouldn't happen. Fallback to a lower order.
+        end
+
+        # when Budan's theorem works.
+        if ub_m == 1
+            # there is single root for this constraint.
+            x, status_flag = getroot()
+
+            if status_flag
+                if 0 < x <= x_right
+                    min_x = min(x, min_x)
+                    success_exit_tag = :stop_simulation
+                end
+
+                # if status_flag is true, but x is invalid, it means the root solve is sure there are no real roots.
+                # this means Budan's upperbound of 0 is false, for whatever reason.
+                # We request reduce order, since this shouldn't happen.
+            end
+            
+            # It could be that the solver tolerance is too high.
+            # we failed to find the root using ITP. Try another solver, or fallback to a lower order.
+            return -one(T), :check_tol
+        
+        elseif ub_m == 0
+            # for sure no intersection with this constraint on the interval.
+            # don't need to do anything.
+
+        else
+            # inconclusive upper bound.
+            # TODO: use a root isolation algorithm here.
+            # for now, we just check the left region to see if we can keep the current order, but reduce the current simulation interval h, such that Budan's upper bound is 0.
+            
+            if allow_reduce_step
+                return -one(T), :reduce_step
+            end
+            
+            return -one(T), :reduce_order
+        end
+    end
+
+    return min_t, success_exit_tag
 end
 
 

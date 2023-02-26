@@ -484,9 +484,7 @@ function solvesegmentIVP!(
     
     getfirstorder!(prob, pt_trait) # this brings the solution to order 1.
     h = applyadaptionstrategy!(prob, pt_trait, h_initial, config)
-
-    # # shorten step size as a heuristic strategy to reduce error.
-    h = h/config.step_reduction_factor
+    #h = h/config.step_reduction_factor
 
     # # update solution, and prepare for the next IVP.
     t_next = t_expansion + h

@@ -16,71 +16,93 @@ struct ITPConfig{T}
     f_tol::T
     x_tol::T
     k1::T
-    k2_percent::T
+    k2::T
+    n0::Int
 end
 
 function ITPConfig(
     ::Type{T};
     f_tol::T = convert(T, 1e-8),
     x_tol::T = convert(T, 1e-15),
-    k1::T = one(T),
-    k2_percent::T = convert(T, 0.5),
+    k1::T = convert(T, 0.1),
+    k2::T = convert(T, 0.98*(1+MathConstants.golden)), # see equation 24.
+    n0::Int = convert(Int, 0),
     )::ITPConfig{T} where T
 
-    return ITPConfig(f_tol, x_tol, k1, k2_percent)
+    @assert k1 > zero(T)
+    @assert one(T) <= k2 < one(T) + MathConstants.golden
+    @assert n0 >= 0
+    @assert x_tol > 0
+    @assert f_tol > 0
+
+    return ITPConfig(f_tol, x_tol, k1, k2, n0)
 end
 
 
 # https://doi-org.proxy.library.carleton.ca/10.1145/3423597
+# assumes f(a) < 0 < f(b).
+# f = xx->evalITPobjective(x, params)
 function runITP(
-    a::T,
-    b::T,
+    lb::T,
+    ub::T,
     params::ITPFuncParams,
     config::ITPConfig{T},
     ) where T
 
-    # parse.
-    f_tol = config.f_tol
-    x_tol = config.x_tol
-    k1 = config.k1
-    k2_percent = config.k2_percent
-
-    @assert !(k1 < zero(T))
-    @assert zero(T) <= k2_percent < one(T)
-    ϵ = x_tol/2
-
-    #ϕ = 0.5*(1+sqrt(5)) # the golden ratio.
-    ϕ = MathConstants.golden
-    k2 = 1 + k2_percent*ϕ
-
-    x_bin = (a+b)/2 # equation 4
-    n_bin = ceil(Int, log2((b-a)/x_tol)) # Theorem 1.1.
-
-    f_a = evalITPobjective(a, params) # f(a)
-    f_b = evalITPobjective(b, params) #f(b)
-    x_RF = (b*f_a-a*f_b)/(f_a-f_b) # equation 5.
-    
-    σ = sign(x_bin - x_RF)
-    δ = k1*abs(b-a)^k2
-
-    x_t = x_bin
-    if δ <= abs(x_bin - x_RF)
-        x_t = x_RF + σ*δ
+    # check if we have a valid problem to solve. See equation 2.
+    f_lb = evalITPobjective(lb, params)
+    f_ub = evalITPobjective(ub, params)
+    if !(f_lb*f_ub < 0) || lb > ub
+        # cannot do root finding on this interval.
+        return convert(T, NaN), false
     end
 
-    # # bracketing algorithm.
-    f_lb = f_a
-    f_ub = f_b
+    # set up constants.
+    f_tol = config.f_tol
+    x_tol = config.x_tol
+    n0 = config.n0
 
-    a_k = a
-    b_k = b
+    k1 = config.k1
+    @assert k1 > zero(T)
+    
+    k2 = config.k2
+    @assert one(T) <= k2 < one(T) + MathConstants.golden
+    #ϕ = 0.5*(1+sqrt(5)) # the golden ratio.
+    #ϕ = MathConstants.golden
+    #k2 = 1 + k2_percent*ϕ
+
+    ϵ = x_tol/2
+    n_bin = ceil(Int, log2((ub-lb)/x_tol)) # Theorem 1.1.
+    n_max = n_bin + n0
+
+    # # bracketing algorithm.
     k = 0
-    C = 2^(n_bin+1)
-    while abs(b_k - a_k) > x_tol
+    a = lb
+    b = ub
+    f_a = f_lb
+    f_b = f_ub
+    C = 2^(n_max+1)
+
+    while abs(b-a) > x_tol
+
+        # interpolation.
+        x_RF = (a*f_b - b*f_a)/(f_b - f_a) # equation 5.
+        
+        # truncation, x_t.
+        x_bin = (a+b)/2 # equation 4
+
+        σ = sign(x_bin - x_RF)
+        δ = k1*abs(b-a)^k2
+    
+        x_t = x_bin
+        if δ <= abs(x_bin - x_RF)
+            x_t = x_RF + σ*δ
+        end
 
         # minimax radius and interval.
-        #r_k = ϵ*2^(n_bin-k) - (b_k-a_k)/2
-        r_k = ϵ*C/2 - (b_k-a_k)/2
+        #r_k = ϵ*2^(n_bin-k) - (b-a)/2
+        C = C/2
+        r_k = ϵ*C - (b-a)/2
         
         #interval_k = [x_bin - r_k, x_bin + r_k]
 
@@ -90,29 +112,34 @@ function runITP(
             x_ITP = x_bin - σ*r_k
         end
 
-        # bracket steps:
-        #w = x_ITP
-        w = (a_k + b_k)/2 # overide with bisection for now. ITP isn't working.
-
-        #@show w
+        # choose a new position in the interval, and see if it is numerically close to being a root.
+        w = x_ITP
+        #w = (a + b)/2 # uncomment to overide ITP with bisection.
+        
         f_w = evalITPobjective(w, params) #f(w)
-
-        if f_w*f_lb > 0
-            a_k = w
-            # b_k = b_k
-        elseif f_w*f_ub > 0
-            #a_k = a_k
-            b_k = w
-        end
-
+        
         if abs(f_w) < f_tol
             return w, true
+        end
+
+        # Set up for the next iteration: bracket steps.
+        if f_w*f_a > 0
+            a = w
+            f_a = f_w
+            # b = b
+        elseif f_w*f_b > 0
+            #a = a
+            b = w
+            f_b = f_w
+        else
+            a = w
+            b = w
         end
 
         k += 1 # first iteration is defined as k == 0. See the paragraph after equation 16.
     end
 
-    return (a_k + b_k)/2, false
+    return (a + b)/2, false
 end
 
 function runITP(
@@ -133,7 +160,7 @@ function runITP(
     # solve roots.
     for m in eachindex(cs)
         t, status_flag = runITP(a, b, PolynomialEvalParams(cs[m], t0), config)
-        #@show t, status_flag
+        @show t, status_flag
 
         # the polynomial is usually very ill-conditioned, so f_tol is unlikely to be reached.
         # check explicitly for root in the calling routine.

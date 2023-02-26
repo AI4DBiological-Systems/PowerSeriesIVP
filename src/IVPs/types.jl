@@ -58,7 +58,7 @@ struct FixedOrderConfig{T} <: IVPConfig
     L::Int
 
     # IVP-related
-    step_reduction_factor::T
+    step_reduction_factor::T # a step reduction factor to be applied in addition to the step size formula. larger or equal to 1.
     max_pieces::Int
 end
 
@@ -83,20 +83,25 @@ end
 # adapt order and step size.
 struct AdaptOrderConfig{T} <: IVPConfig
     ϵ::T
-    L_test_max::Int
+    L_min::Int
+    L_max::Int # L_test_max
     r_order::T
     h_zero_error::T
     N_analysis_terms::Int
 
     # IVP-related
-    step_reduction_factor::T
+    step_reduction_factor::T # a step reduction factor to be applied in addition to the step size formula. larger or equal to 1.
     max_pieces::Int
+
+    # buffers
+    Es::Vector{T} # errors, length N_analysis_terms.
 end
 
 function AdaptOrderConfig(
     ::Type{T};
     ϵ::T = convert(T, 1e-6),
-    L_test_max::Int = convert(Int, 10),
+    L_min::Int = 4,
+    L_max::Int = convert(Int, 10),
     r_order = convert(T, 0.3),
     h_zero_error = convert(T, Inf),
     N_analysis_terms::Int = convert(Int, 2),
@@ -104,9 +109,16 @@ function AdaptOrderConfig(
     step_reduction_factor = 2,
     ) where T
 
+    @assert L_min > N_analysis_terms
+    @assert L_min < L_max
+    @assert N_analysis_terms > 0
+    @assert max_pieces > 0
+    @assert step_reduction_factor > 0
+
     return AdaptOrderConfig(
         convert(T, ϵ),
-        convert(Int, L_test_max),
+        convert(Int, L_min),
+        convert(Int, L_max),
         convert(T, r_order),
         convert(T, h_zero_error),
         convert(Int, N_analysis_terms),
@@ -145,17 +157,17 @@ end
 struct BudanIntersectionBuffers{T}
     # [constraints][order]
     cs::Vector{Vector{T}}
-    cs_left::Vector{Vector{T}}
+    #cs_left::Vector{Vector{T}}
     cs_right::Vector{Vector{T}}
-    cs_center::Vector{Vector{T}}
+    #cs_center::Vector{Vector{T}}
 end
 
 function BudanIntersectionBuffers(::Type{T}, N_constraints::Integer, order::Integer)::BudanIntersectionBuffers{T} where T
     
     return BudanIntersectionBuffers(
         collect( zeros(T, order) for _ = 1:N_constraints ),
+        #collect( zeros(T, order) for _ = 1:N_constraints ),
         collect( zeros(T, order) for _ = 1:N_constraints ),
-        collect( zeros(T, order) for _ = 1:N_constraints ),
-        collect( zeros(T, order) for _ = 1:N_constraints ),
+        #collect( zeros(T, order) for _ = 1:N_constraints ),
     )
 end

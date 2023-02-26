@@ -4,7 +4,7 @@
 
 # mutates cs.
 # the intersection polynomial operate on the variable t-t0, t0 is the expansion point, a constant.
-function updateintersectionpolynomial!(
+function updateintersectionpolynomials!(
     cs::Vector{Vector{T}}, # [constraints][order]
     x::Vector{Vector{T}}, # [variable][order]
     as::Vector{Vector{T}}, # [constraints][variable]
@@ -233,7 +233,7 @@ function refinestep!(
     smallest_positive_roots = A.smallest_positive_roots
     atol = A.zero_tol
 
-    updateintersectionpolynomial!(cs, x, constraints.normals, constraints.offsets)
+    updateintersectionpolynomials!(cs, x, constraints.normals, constraints.offsets)
 
     for m in eachindex(cs)
         standardizecoefficients!(cs[m]) # put in standard form.
