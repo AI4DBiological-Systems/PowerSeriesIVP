@@ -6,6 +6,7 @@ Random.seed!(25)
 PyPlot.close("all")
 fig_num = 1
 
+#include("helpers/test_helpers.jl")
 
 ###### get x and u.
 
@@ -26,16 +27,18 @@ N_parallel_vector_fields = 1
 ## set to same as u.
 v0_set = collect( rand(N_vars) for _ = 1:N_parallel_vector_fields)
 
-L_test_max = 10
-N_analysis_terms = 2
-L_max = L_test_max + N_analysis_terms
+L_min = 4
+L_max = 10
+N_analysis_terms = 3
+#L_max = L_max + N_analysis_terms
 
 adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
     Float64;
     #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
     ϵ = 1e-6,
-    L_test_max = L_test_max, # increase this for maximum higher-order power series.
-    r_order = 0.1,
+    L_min = L_min,
+    L_max = L_max, # increase this for maximum higher-order power series.
+    r_order = 0.3,
     h_zero_error = Inf,
     step_reduction_factor = 2.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
@@ -51,10 +54,11 @@ fixed_order_config = PowerSeriesIVP.FixedOrderConfig(
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
 )
 
-#config = adaptive_order_config
-config = fixed_order_config
+config = adaptive_order_config
+#config = fixed_order_config
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
 prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
+constraints_info = PowerSeriesIVP.NoConstraints()
 sol = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
@@ -63,7 +67,7 @@ sol = PowerSeriesIVP.solveIVP(
     t_start,
     t_fin,
     config;
-    h_initial = 1.0
+    constraints_info = constraints_info,
 )
 
 # @btime PowerSeriesIVP.solveIVP(
@@ -90,7 +94,7 @@ sol2 = PowerSeriesIVP.solveIVP(
     t_start,
     t_fin,
     config;
-    h_initial = 1.0
+    constraints_info = constraints_info,
 )
 
 orders = collect( PowerSeriesIVP.getorder(sol.coefficients[i]) for i in eachindex(sol.coefficients) )
@@ -229,6 +233,31 @@ PyPlot.ylabel("x2")
 PyPlot.title("trajectory x1, x2")
 
 
+########### continuity check.
+
+continuity_ϵ = eps(Float64)*10
+continuity_pass_flag = PowerSeriesIVP.continuitycheck(sol; atol = continuity_ϵ)
+@show continuity_pass_flag
+
+discrepancies, orders = PowerSeriesIVP.getderivativediscrepancies(sol)
+@show minimum(discrepancies), maximum(discrepancies)
+
+println("[orders'; discrepancies; maximum(discrepancies, dims=1)]:")
+display( [orders'; discrepancies; maximum(discrepancies, dims=1)] )
+# we can see our step size selection algorithm gives higher derivative continuity error for higher-order approximations.
+println()
+
+max_discrepancies = vec(maximum(abs.(discrepancies), dims=1)) # for each piece.
+table = Table(piece = 1:length(orders), orders = orders, error = max_discrepancies, step_size = sol.steps)
+display(table)
+
+# I am here. devise strategy based on the derivaitve continuity to control step size
+# and order increases.
+# Need Lipschitz continuous on d( f ∘ R ), so this is kind of important!!
+# check where in the proof we need this condition, and see if we can get away with it...
+
+@assert 555==4
+
 ########## test root solving code. Cubic and quartic euqations.
 
 c_cube = randn(3)
@@ -302,8 +331,8 @@ intersection_buf = PowerSeriesIVP.IntersectionBuffer(complex_zero_tol, L, N_cons
 
 t_intersect, constraint_ind = PowerSeriesIVP.refinestep!(
     intersection_buf,
-    c_p,
     h,
+    c_p,
     constraints,
 )
 @show h, t_intersect, constraint_ind, intersection_buf.smallest_positive_roots

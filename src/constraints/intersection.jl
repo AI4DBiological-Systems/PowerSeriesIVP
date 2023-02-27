@@ -1,32 +1,30 @@
 
 ############# for refining step in the cosntrained IVP case.
 
-function getorder(C::GeodesicPiece)::Int
-    return length(C.x[begin])-1
-end
 
 
 
 
-function getroot()
-    order = getorder()
-    if order == 4
-        #
-        t = getmin_positive_real_root()
-        return t, status
 
-    elseif order == 3
-        #
-    elseif order == 2
-        #
-    elseif order == 1
-        #
-    elseif order != 0
-        runITP()
-    end
+# function getroot()
+#     order = getorder()
+#     if order == 4
+#         #
+#         t = getmin_positive_real_root()
+#         return t, status
 
-    "error_order is 0!!! Redo this piece with quartic"
-end
+#     elseif order == 3
+#         #
+#     elseif order == 2
+#         #
+#     elseif order == 1
+#         #
+#     elseif order != 0
+#         runITP()
+#     end
+
+#     "error_order is 0!!! Redo this piece with quartic"
+# end
 
 
 

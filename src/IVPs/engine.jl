@@ -65,6 +65,10 @@ function getNvars(c::GeodesicPiece)::Int
     return length(c.x)
 end
 
+function getorder(C::GeodesicPiece)::Int
+    return length(C.x[begin])-1
+end
+
 struct PiecewiseTaylorPolynomial{T}
 
     # [piece index]
@@ -101,6 +105,10 @@ end
 
 function getNvars(A::PiecewiseTaylorPolynomial)::Int
     return length(A.coefficients[begin].x)
+end
+
+function getNpieces(A::PiecewiseTaylorPolynomial)::Int
+    return length(A.coefficients)
 end
 
 function resetsolution!(
@@ -157,7 +165,7 @@ end
 struct GeodesicEvaluation{T}
     position::Vector{T}
     velocity::Vector{T}
-    vector_field::Vector{Vector{T}}
+    vector_fields::Vector{Vector{T}}
 end
 
 function GeodesicEvaluation(::Type{T}, N_vars::Integer, N_transports::Integer)::GeodesicEvaluation{T} where T
@@ -177,6 +185,8 @@ function evalsolution!(
     a,
     ) where T
 
+    # @show length(c.x)
+    # @show length(out.position)
     @assert length(c.x) == length(c.u) == length(out.position) == length(out.velocity)
 
     for d in eachindex(c.x)
@@ -200,7 +210,7 @@ function evalsolution!(
 
     for m in eachindex(c.vs)
         for d in eachindex(c.vs[m])
-            out.vector_field[m][d] = evaltaylor(c.vs[m][d], t, a)
+            out.vector_fields[m][d] = evaltaylor(c.vs[m][d], t, a)
         end
     end
 
@@ -295,8 +305,8 @@ function batchevalsolution!(
         positions_buffer[n][:] = out.position
         velocities_buffer[n][:] = out.velocity
         
-        for m in eachindex(out.vector_field)
-            vector_fields_buffer[n][m][:] = out.vector_field[m]
+        for m in eachindex(out.vector_fields)
+            vector_fields_buffer[n][m][:] = out.vector_fields[m]
         end
     end
 
@@ -319,8 +329,7 @@ function solveIVP(
     t_start::T,
     t_fin::T,
     config::IVPConfig;
-    shouldstop = contradiction, # this function takes at least an input that is of type GeodesicEvaluation{T}, and returns true if we should stop simulating the forward trajectory of the IVP.
-    h_initial::T = convert(T, (t_fin-t_start)/10),
+    constraints_info::ConstraintType = NoConstraints(),
     )::PiecewiseTaylorPolynomial{T} where {T, MT<:MetricParams, PT<:ParallelTransportTrait}
 
     sol = PiecewiseTaylorPolynomial(
@@ -346,8 +355,7 @@ function solveIVP(
         t_start,
         t_fin,
         config;
-        shouldstop = shouldstop,
-        h_initial = h_initial,
+        constraints_info = constraints_info,
     )
 
     return sol
@@ -365,8 +373,7 @@ function solveIVP!(
     t_start::T,
     t_fin::T,
     config::IVPConfig;
-    shouldstop = contradiction, # this function takes at least an input that is of type GeodesicEvaluation{T}, and returns true if we should stop simulating the forward trajectory of the IVP.
-    h_initial::T = convert(T, (t_fin-t_start)/10),
+    constraints_info::ConstraintType = NoConstraints(),
     ) where {T, MT<:MetricParams, PT<:ParallelTransportTrait}
 
     # #set up.
@@ -385,19 +392,20 @@ function solveIVP!(
     resetsolution!(sol, prob_params.x0, prob_params.u0, prob_params.v0_set)
 
     # # solve for the first solution piece.
-    t_next = solvesegmentIVP!(
+    t_next, instruction = solvesegmentIVP!(
         sol,
         next_conditions,
         prob,
         pt_trait,
-        h_initial,
+        #h_initial,
         t_expansion,
         config,
+        constraints_info,
     )
     #h_initial = sol.steps[end] * 10 # heurestic, so that we have similar step sizes?
 
     # check stopping condition
-    if t_next > t_fin || shouldstop(sol, next_conditions)
+    if t_next > t_fin || instruction == :stop_simulation
         return sol
     end
 
@@ -409,24 +417,23 @@ function solveIVP!(
             metric_params,
             next_conditions.position,
             next_conditions.velocity,
-            next_conditions.vector_field,
+            next_conditions.vector_fields,
         )
         t_expansion = t_next
 
         # solve for the current solution piece.
-        t_next = solvesegmentIVP!(
+        t_next, instruction = solvesegmentIVP!(
             sol,
             next_conditions,
             prob_current,
             pt_trait,
-            h_initial, # more direct control over how large the step sizes could be. set this to be large to encourage taking a big step and high-order.
             t_expansion,
-            #sol.steps[end], # use the step from the last solution piece as the initial segment. actually, might not make sense for the geodesic setting, where extreme accuracy might not be needed.
             config,
+            constraints_info,
         )
     
         # check stopping condition.
-        if t_next > t_fin || shouldstop(sol, next_conditions)
+        if t_next > t_fin || instruction == :stop_simulation
             return sol
         end
     
@@ -465,10 +472,10 @@ function solvesegmentIVP!(
     next_conditions::GeodesicEvaluation{T},
     prob::GeodesicIVPBuffer,
     pt_trait::ParallelTransportTrait,
-    h_initial::T,
     t_expansion::T,
-    config,
-    ) where T
+    config::IVPConfig,
+    C::ConstraintType,
+    )::Tuple{T,Symbol} where T
 
     # # solve for an appropriate step size, increasing the order according to the adaptation strategy in strategy_config.
     # h = computetaylorsolution!(
@@ -483,13 +490,105 @@ function solvesegmentIVP!(
     # )
     
     getfirstorder!(prob, pt_trait) # this brings the solution to order 1.
-    h = applyadaptionstrategy!(prob, pt_trait, h_initial, config)
-    #h = h/config.step_reduction_factor
+    h, instruction = computetaylorsolution!(prob, pt_trait, config, C)
 
     # # update solution, and prepare for the next IVP.
     t_next = t_expansion + h
     storesolutionpiece!(sol, next_conditions, pt_trait, prob, t_expansion, h)
     
-    return t_next
+    return t_next, instruction
 end
 
+# if continuity conditions fail, mutates sol and eval_buffer.
+function continuitycheck!(
+    sol::PiecewiseTaylorPolynomial{T},
+    eval_buffer::GeodesicEvaluation{T},
+    #prob::GeodesicIVPBuffer,
+    pt_trait::PT,
+    metric_params::MT,
+    config::ContinuityConfig{T},
+    ) where {T,PT,MT}
+
+    min_h = config.min_h
+    discount_factor = config.discount_factor
+
+    # get initial conditions for the next piece.
+    t0_current = sol.t_expansion[end]
+    h_current = sol.steps[end]
+    t0_next = t0_current + h_current
+    evalsolution!(eval_buffer, pt_trait, sol.coefficients[end], t0_next, t0_current)
+
+    # solve the test solution for the next piece.
+    prob = getivpbuffer(
+        metric_params,
+        eval_buffer.position,
+        eval_buffer.velocity,
+        eval_buffer.vector_fields,
+    )
+    getfirstorder!(prob, pt_trait) # this brings the solution to order 1.
+    
+    # check if x_dot_current(t0_next) and u0 agrees.
+    pass_flag = continuitycheck(eval_buffer.velocity, prob.x.c, config)
+    
+    while !pass_flag && h_current > min_h
+        # redo the test solution with a smaller current step.
+
+        h_current = h_current * discount_factor
+        
+        prob = getivpbuffer(
+            metric_params,
+            eval_buffer.position,
+            eval_buffer.velocity,
+            eval_buffer.vector_fields,
+        )
+        getfirstorder!(prob, pt_trait)
+        
+        pass_flag = continuitycheck(eval_buffer.velocity, prob.x.c, config)
+    end
+
+    if h_current < min_h
+        return h_urrent, prob, :try_again_with_decreased_order_need_to_get_starting_h_again
+    end
+
+    return h_current, prob, :clear_to_proceed
+end
+
+
+
+function continuitycheck(
+    #sol_current::GeodesicPiece{T},
+    #sol_eval::GeodesicEvaluation{T},
+    #next_piece::GeodesicPiece{T},
+    next_u0::Vector{T},
+    next_x::Vector{Vector{T}},
+    config::ContinuityConfig{T},
+    ) where T
+
+    # # # separate checks. # should all have err of zero, due to sol_eval being the initial condition for the next IVP problem.
+    # err = maximum( abs(sol_eval.position[d] - next_piece.x[d][begin]) for d in eachindex(sol_eval.position) )
+    # if err > config.zero_tol
+    #     return false
+    # end
+
+    # err = maximum( abs(sol_eval.velocity[d] - next_piece.u[d][begin]) for d in eachindex(sol_eval.velocity) )
+    # if err > config.zero_tol
+    #     return false
+    # end
+    
+    # for i in eachindex(sol_eval.vector_fields)
+    #     v = sol_eval.vector_fields[i]
+    #     err = maximum( abs(v[d] - next_piece.u[d][begin]) for d in eachindex(v) )
+    #     if err > config.zero_tol
+    #         return false
+    #     end
+    # end
+
+    # joint checks: 1st order of x should be 0th order of u. If the first-order IVP we solve was derived from a higher-order IVP, then we need to do this type of check.
+    #err = maximum( abs(sol_eval.velocity[d] - next_piece.x[d][begin+1]) for d in eachindex(sol_eval.velocity) )
+    err = maximum( abs(next_u0[d] - next_x[d][begin+1]) for d in eachindex(next_u0) )
+    if err > config.zero_tol
+        return false
+    end
+
+    return true
+end

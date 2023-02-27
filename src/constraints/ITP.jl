@@ -12,32 +12,6 @@ function evalITPobjective(x::T, p::PolynomialEvalParams{T})::T where T
     return evaltaylor(p.c, x, zero(T))
 end
 
-struct ITPConfig{T}
-    f_tol::T
-    x_tol::T
-    k1::T
-    k2::T
-    n0::Int
-end
-
-function ITPConfig(
-    ::Type{T};
-    f_tol::T = convert(T, 1e-8),
-    x_tol::T = convert(T, 1e-15),
-    k1::T = convert(T, 0.1),
-    k2::T = convert(T, 0.98*(1+MathConstants.golden)), # see equation 24.
-    n0::Int = convert(Int, 0),
-    )::ITPConfig{T} where T
-
-    @assert k1 > zero(T)
-    @assert one(T) <= k2 < one(T) + MathConstants.golden
-    @assert n0 >= 0
-    @assert x_tol > 0
-    @assert f_tol > 0
-
-    return ITPConfig(f_tol, x_tol, k1, k2, n0)
-end
-
 
 # https://doi-org.proxy.library.carleton.ca/10.1145/3423597
 # assumes f(a) < 0 < f(b).
@@ -119,7 +93,7 @@ function runITP(
         f_w = evalITPobjective(w, params) #f(w)
         
         if abs(f_w) < f_tol
-            return w, true
+            return clamp(w, lb, ub), true
         end
 
         # Set up for the next iteration: bracket steps.
@@ -139,9 +113,11 @@ function runITP(
         k += 1 # first iteration is defined as k == 0. See the paragraph after equation 16.
     end
 
-    return (a + b)/2, false
+    return clamp((a + b)/2, lb, ub), false
 end
 
+# front end for intersection polynomials in `cs`
+# cs is from BudanIntersectionBuffers' cs field.
 function runITP(
     cs::Vector{Vector{T}}, # [constraints][order]
     t0::T,
@@ -171,4 +147,13 @@ function runITP(
     end
 
     return min_t, found_root
+end
+
+function runITP(
+    A::BudanIntersectionBuffers{T},
+    t0::T,
+    h::T,
+    ) where T <: AbstractFloat
+
+    return runITP(A.cs, t0, h, A.solver_config)
 end

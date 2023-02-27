@@ -221,10 +221,11 @@ function findminpositivereal(
     return r
 end
 
+# second output is 0 if no roots. An index between [0, N_constraints] if a real root was found.
 function refinestep!(
     A::IntersectionBuffer{T},
-    x::Vector{Vector{T}},
     h::T,
+    x::Vector{Vector{T}},
     constraints::AffineConstraints{T},
     )::Tuple{T,Int} where T <: AbstractFloat
     
@@ -243,14 +244,37 @@ function refinestep!(
     end
     t, constraint_ind = findmin(smallest_positive_roots)
     
-    if t < h
+    if zero(T) < t <= h
         return t, constraint_ind
     end
 
     return h, 0
 end
 
+# front end.
+function refinestep!(
+    C::AffineConstraintsContainer{T},
+    h::T,
+    x::Vector{Vector{T}},
+    )::Tuple{T,Int} where T <: AbstractFloat
 
+    return refinestep!(
+        C.explicit_roots_buffer,
+        h,
+        x,
+        C.constraints,
+    )
+end
+
+# front end.
+function refinestep!(
+    _::NoConstraints,
+    h::T,
+    args...
+    )::Tuple{T,Int} where T <: AbstractFloat
+    
+    return h, 0
+end
 
 # mutates intersection_buf.
 function searchintersection!(
@@ -269,8 +293,8 @@ function searchintersection!(
 
         ts[n], inds[n] = refinestep!(
             intersection_buf,
-            sol.coefficients[n].x,
             sol.steps[n],
+            sol.coefficients[n].x,
             constraints,
         )
     end

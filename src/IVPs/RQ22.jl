@@ -361,5 +361,6 @@ function getivpbuffer(
         
         # initial conditions
         x0, u0,
+        #copy(x0), copy(u0), # the supplied initial conditions might be overwritten later. make a copy is safer.
     )
 end

@@ -43,6 +43,27 @@ function increaseorder!(
     return nothing
 end
 
+# no error checking.
+function decreaseorder!(
+    A::IntegralSequence{T}, # gets mutated.
+    amount::Integer, # number of orders to be reduced.
+    min_order::Integer, # >= 0.
+    ) where T
+    
+    new_order = max(getorder(A)-amount, min_order)
+    new_length = new_order + 1
+
+    for d in eachindex(A.c)
+        resize!(A.c[d], new_length)
+    end
+
+    return nothing
+end
+
+function getorder(A::IntegralSequence)::Int
+    return length(A.c[begin]) -1 # order of first variale dimension.
+end
+
 # # This is for updating from an x that has just been updated, but we really want to simultaneously update A.c along with x.c.
 # # we'd need to look at the second last entry instead of the last entry.
 # function increaseorderfromderivative!(

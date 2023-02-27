@@ -94,7 +94,8 @@ struct AdaptOrderConfig{T} <: IVPConfig
     max_pieces::Int
 
     # buffers
-    Es::Vector{T} # errors, length N_analysis_terms.
+    #Es::Vector{T} # errors, length N_analysis_terms.
+    #explicit_roots_buffer::IntersectionBuffer{T}
 end
 
 function AdaptOrderConfig(
@@ -127,11 +128,27 @@ function AdaptOrderConfig(
     )
 end
 
+############ continuity step refinement.
 
+# abstract type ContinuityConfig end
+# # 1-st order continuity conditions for x and u.
+# struct ContinuityConfigXU{T} <: ContinuityConfig
+#     stop_order::Int # >= 0.
+#     zero_tol::T
 
-############# constraints
+#     # buffer.
+#     discrepancies::Matrix{T} # [order coefficient index][variable dimension]
+# end
+struct ContinuityConfig{T}
+    zero_tol::T # above 0.
+    min_h::T # above 0.
+    discount_factor::T # in the interval (0,1).
+end
+
+############# constraints step refinement.
 
 struct PositiveRealTrait end
+
 
 struct AffineConstraints{T}
     normals::Vector{Vector{T}}
@@ -157,8 +174,11 @@ end
 struct BudanIntersectionBuffers{T}
     # [constraints][order]
     cs::Vector{Vector{T}}
-    #cs_left::Vector{Vector{T}}
     cs_right::Vector{Vector{T}}
+    
+    ubs::Vector{T} # buffer, [constraints].
+
+    #cs_left::Vector{Vector{T}}
     #cs_center::Vector{Vector{T}}
 end
 
@@ -166,8 +186,56 @@ function BudanIntersectionBuffers(::Type{T}, N_constraints::Integer, order::Inte
     
     return BudanIntersectionBuffers(
         collect( zeros(T, order) for _ = 1:N_constraints ),
-        #collect( zeros(T, order) for _ = 1:N_constraints ),
         collect( zeros(T, order) for _ = 1:N_constraints ),
-        #collect( zeros(T, order) for _ = 1:N_constraints ),
+        ones(T, N_constraints) .* NaN,
     )
+end
+
+
+#### numerical solver types (put into separate library later.)
+struct ITPConfig{T}
+    f_tol::T
+    x_tol::T
+    k1::T
+    k2::T
+    n0::Int
+end
+
+function ITPConfig(
+    ::Type{T};
+    f_tol::T = convert(T, 1e-8),
+    x_tol::T = convert(T, 1e-15),
+    k1::T = convert(T, 0.1),
+    k2::T = convert(T, 0.98*(1+MathConstants.golden)), # see equation 24.
+    n0::Int = convert(Int, 0),
+    )::ITPConfig{T} where T
+
+    @assert k1 > zero(T)
+    @assert one(T) <= k2 < one(T) + MathConstants.golden
+    @assert n0 >= 0
+    @assert x_tol > 0
+    @assert f_tol > 0
+
+    return ITPConfig(f_tol, x_tol, k1, k2, n0)
+end
+
+#### constraints front end.
+
+abstract type ConstraintType end
+
+struct NoConstraints <: ConstraintType end
+
+
+struct AffineConstraintsContainer{T} <: ConstraintType
+    #
+    constraints::AffineConstraints{T}
+
+    # buffers
+    explicit_roots_buffer::IntersectionBuffer{T}
+    upperbound_buffer::BudanIntersectionBuffers{T}
+    bino_mat::Matrix{Int}
+    max_divisions::Int
+
+    # configs
+    solver_config::ITPConfig{T}
 end

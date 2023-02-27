@@ -153,7 +153,7 @@ status_flag = PowerSeriesIVP.evalsolution!(
 )
 @show norm(sol_eval.position - x_evals[t_select]) # the queried position.
 @show norm(sol_eval.velocity - u_evals[t_select]) # the queried velocity.
-@show norm(sol_eval.vector_field - vs_evals[t_select]) # the queried velocity.
+@show norm(sol_eval.vector_fields - vs_evals[t_select]) # the queried velocity.
 println()
 
 ```

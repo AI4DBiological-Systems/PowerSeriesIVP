@@ -1,5 +1,8 @@
 # main routine for computing the power series method iterations for the generic geodesic IVP problem.
 
+function getorder(p::GeodesicIVPBuffer)::Int
+    return length(p.x.c[begin])-1
+end
 
 function getfirstorder!(p::GeodesicIVPBuffer, _::DisableParallelTransport)
 
@@ -30,6 +33,20 @@ function increaseorder!(p::GeodesicIVPBuffer, _::DisableParallelTransport)
     return nothing
 end
 
+# only decrease x and u. Does not decrease intermediates variables and their buffers, such as  θ.
+function decreaseorder!(p::GeodesicIVPBuffer, _::DisableParallelTransport, min_order::Integer)
+
+    # if length(p.x.c) < 1
+    #     println("Warning, decreaseorder!() received an polynomial less than order 1. Did not decrease order further.")
+    #     return nothing
+    # end
+
+    # variables
+    decreaseorder!(p.x, 1, min_order)
+    decreaseorder!(p.u, 1, min_order)
+
+    return nothing
+end
 
 function getfirstorder!(p::GeodesicIVPBuffer, _::EnableParallelTransport)
 
@@ -81,6 +98,27 @@ function increaseorder!(p::GeodesicIVPBuffer, _::EnableParallelTransport)
     return nothing
 end
 
+# only decrease x and u and {pt[m].v}_m. Does not decrease intermediates variables and their buffers, such as  θ and ζ.
+function decreaseorder!(p::GeodesicIVPBuffer, _::EnableParallelTransport, min_order::Integer)
+
+    # if length(p.x.c) < 1
+    #     println("Warning, decreaseorder!() received an polynomial less than order 1. Did not decrease order further.")
+    #     return nothing
+    # end
+
+    pt = p.parallel_transport
+
+    # decrease the position p.x and geodesic velocity/vector field p.u.
+    decreaseorder!(p, DisableParallelTransport(), min_order)
+
+    # update the transport vector variables and quantities.
+    for m in eachindex(pt)
+        decreaseorder!(pt[m].v, 1, min_order)
+    end
+
+    return nothing
+end
+
 ###### adaptive step
 
 # eq:error_estimate backup.
@@ -117,20 +155,21 @@ end
 
 # based on sum error formula in my notes.
 function computeerrorratio(
-    cs::Vector{Vector{T}},
+    x::Vector{Vector{T}},
+    ϵ::T,
     N_analysis_terms::Integer;
     h_zero_error = Inf,
     step_reduction_factor = 2,
     )::T where T
     
-    order = length(cs[begin])
+    order = length(x[begin])
     @assert order > N_analysis_terms > 0
 
     M = order - N_analysis_terms
     
     a = choosestepsize(
         ϵ,
-        cs;
+        x;
         order = M,
         h_zero_error = h_zero_error,
         step_reduction_factor = step_reduction_factor,
@@ -138,7 +177,7 @@ function computeerrorratio(
 
     b = choosestepsize(
         ϵ,
-        cs;
+        x;
         order = M-1,
         h_zero_error = h_zero_error,
         step_reduction_factor = step_reduction_factor,
@@ -146,12 +185,12 @@ function computeerrorratio(
 
     numerator = zero(T)
     denominator = zero(T)
-    for d in eachindex(cs)
+    for d in eachindex(x)
         
-        c = cs[d]
+        x_d = x[d]
 
-        numerator += abs(sum( c[begin+M+n]*a^(n-1) for n = 1:N_analysis_terms ))
-        denominator += abs(sum( c[begin+M-1+n]*b^(n-1) for n = 1:N_analysis_terms ))
+        numerator += abs(sum( x_d[end-n+1]*a^(n-1) for n = 1:N_analysis_terms ))
+        denominator += abs(sum( x_d[end-1-n]*b^(n-1) for n = 1:N_analysis_terms ))
     end
     error_ratio = (numerator*a^M)/(denominator*b^(M-1))
 
@@ -219,6 +258,7 @@ function choosestepsize(
     return convert(T, h_zero_error/step_reduction_factor)
 end
 
+# see http://www.phys.uri.edu/nigh/NumRec/bookfpdf/f16-2.pdf for a constrast of the method from PSM 2019 with mainstream RK adaptive step size selection algorithms.
 # we hardcoded such that only one analysis term for the step size determination.
 function stepsizeformula(ϵ::T, x::T, L::Integer)::T where T
     return (abs(ϵ/(2*x)))^(1/(L-1))
@@ -247,11 +287,13 @@ function choosestepsize(
     return min_h
 end
 
-function applyadaptionstrategy!(
+# no constraints.
+function computetaylorsolution!(
     prob::GeodesicIVPBuffer,
     pt_trait::PT,
-    h_test::T,
+    #h_test::T,
     config::FixedOrderConfig{T},
+    _::NoConstraints,
     ) where {T, PT}
 
     ### get to a high enough order so that we can start computing the error.
@@ -260,28 +302,33 @@ function applyadaptionstrategy!(
     for _ = 2:config.L
         increaseorder!(prob, pt_trait)
     end
-    #@show length(prob.x.c[1])
-    #println()
     
-    error_val, error_var_ind = computemaxerror(prob.x.c, h_test, 1)
-    
-    return choosestepsize(
+    #error_val, error_var_ind = computemaxerror(prob.x.c, h_test, 1)
+    # return choosestepsize(
+    #     config.ϵ,
+    #     prob.x.c[error_var_ind];
+    #     h_zero_error = config.h_zero_error,
+    #     step_reduction_factor = config.step_reduction_factor,
+    # )
+    h = choosestepsize(
         config.ϵ,
-        prob.x.c[error_var_ind];
+        prob.x.c;
         h_zero_error = config.h_zero_error,
-        step_reduction_factor = config.step_reduction_factor)
+        step_reduction_factor = config.step_reduction_factor,
+    )
+
+    return h, :continue_simulation
 end
 
-
-function applyadaptionstrategy!(
+function computetaylorsolution!(
     prob::GeodesicIVPBuffer,
     pt_trait::PT,
-    h_initial::T,
     config::AdaptOrderConfig{T},
+    C::ConstraintType,
     ) where {T, PT}
 
     ### set up
-    
+
     ϵ = config.ϵ
     L_min = config.L_min
     L_max = config.L_max
@@ -291,15 +338,14 @@ function applyadaptionstrategy!(
     step_reduction_factor = config.step_reduction_factor
     p = prob
 
-    error_threshold = ϵ/2
-
-    err_record = ones(T, L_test_max) # first entry is for 1st-order, so on.
-    fill!(err_record, Inf)
+    #explicit_roots_buffer = constraints_container.explicit_roots_buffer
+    #constraints = constraints_container.constraints
 
     ### get to a high enough order so that we can start computing the error.
     # from the calling function, firstorder!() got prob.x and prob.u up to order 1 already.
     # start from 2, but make sure we have at least an extra order number to do order-adaption's error analysis. Look into this later.
-    for _ = 2:L_max
+    L_start = getorder(prob) + 1
+    for _ = L_start:L_min
         increaseorder!(prob, pt_trait)
     end
 
@@ -310,16 +356,25 @@ function applyadaptionstrategy!(
         h_zero_error = h_zero_error,
         step_reduction_factor = step_reduction_factor,
     )
+    
+    h_new, constraint_ind = refinestep!(
+        C,
+        h,
+        p.x.c,
+    )
 
-    if checkroots()
-        return h
+    if constraint_ind > 0
+        # found intersection.
+        return h_new, :stop_simulation
     end
     
 
     ### start adaption strategy.
     h_prev = h
 
-    for l = (1+N_analysis_terms):L_test_max # l is L_test
+    r = r_order + 1 # initialize to a value so we satisfy the loop condition the first time.
+    while getorder(prob) < L_max && r > r_order
+
         # increase order.
         increaseorder!(prob, pt_trait)
 
@@ -330,38 +385,59 @@ function applyadaptionstrategy!(
             step_reduction_factor = step_reduction_factor,
         )
 
-        x_right, status = checkroots()
+        h_new, constraint_ind = refinestepnumerical!(
+            C, h, h_prev, p.x.c, 
+        )
 
-        if status == :one_root
-            
-            h_new = runITP()
-            return h_new
+        #valid_h_new = (0 < h_new < h)
+        valid_h_new = isfinite(h_new)
+
+        # we avoid returning inside the if-else if we have no roots in [0, h_new] at the current order.
+        if valid_h_new
+            # if constraint_ind == 0
+            #     # no roots on [0, h_new)
+
+            #     return h_new, :continue_simulation
+            # else
+            #     # found intersection.
+
+            #     return h_new, :stop_simulation
+            # end
+
+            if constraint_ind == 1
+                # found intersection.
+                return h_new, :stop_simulation
+            end
         
-        elseif status == :no_root
-
-            # do nothing.
         else 
             # the inconclusive case and unexpected error case, like root solve failed.
+            # no intersection so far, up to and including the previous order.
 
-            decreaseorder!()
+            if getorder(prob) > L_min
 
-            return h_prev
+                decreaseorder!(prob, pt_trait, L_min)
+            end
+            # don't need to decrease if we're already at order: L_min.
+
+            return h_prev, :continue_simulation
         end
 
-        # I am here. see current_notes under `root find` folder.
+        # estimate the decrease in error by our increase in order.
+        # see current_notes under `root find` folder.
         r = computeerrorratio(
-            cs,
+            p.x.c,
+            ϵ,
             N_analysis_terms;
             h_zero_error = h_zero_error,
             step_reduction_factor = step_reduction_factor,
         )
 
-        if r < r_order
-            return h
-        end
+        # if r < r_order
+        #     return h_new
+        # end
 
-        h_prev = h
+        h_prev = h_new
     end
 
-    return h
+    return h_new, :continue_simulation
 end
