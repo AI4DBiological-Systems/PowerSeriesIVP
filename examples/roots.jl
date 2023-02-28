@@ -28,17 +28,17 @@ N_parallel_vector_fields = 1
 v0_set = collect( rand(N_vars) for _ = 1:N_parallel_vector_fields)
 
 L_min = 4
-L_max = 10
+L_max = 21
 N_analysis_terms = 3
 #L_max = L_max + N_analysis_terms
 
 adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
     Float64;
-    #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
-    ϵ = 1e-6,
+    ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
+    #ϵ = 1e-6,
     L_min = L_min,
     L_max = L_max, # increase this for maximum higher-order power series.
-    r_order = 0.3,
+    r_order = 0.3, # lower means higher-order, fewer pieces. very sensitive around 0.1 to 0.3.
     h_zero_error = Inf,
     step_reduction_factor = 2.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
@@ -239,22 +239,57 @@ continuity_ϵ = eps(Float64)*10
 continuity_pass_flag = PowerSeriesIVP.continuitycheck(sol; atol = continuity_ϵ)
 @show continuity_pass_flag
 
-discrepancies, orders = PowerSeriesIVP.getderivativediscrepancies(sol)
-@show minimum(discrepancies), maximum(discrepancies)
+continuity_analysis_order = 4
+xu0_err, xuh_err, endpoint_err, endpoint_err_x, endpoint_err_u, interval_err, orders = PowerSeriesIVP.getderivativediscrepancies(sol, continuity_analysis_order)
+@show minimum(endpoint_err), maximum(endpoint_err)
 
-println("[orders'; discrepancies; maximum(discrepancies, dims=1)]:")
-display( [orders'; discrepancies; maximum(discrepancies, dims=1)] )
+println("[orders'; endpoint_err; maximum(endpoint_err, dims=1)]:")
+display( [orders'; endpoint_err; maximum(endpoint_err, dims=1)] )
 # we can see our step size selection algorithm gives higher derivative continuity error for higher-order approximations.
 println()
 
-max_discrepancies = vec(maximum(abs.(discrepancies), dims=1)) # for each piece.
-table = Table(piece = 1:length(orders), orders = orders, error = max_discrepancies, step_size = sol.steps)
+max_endpoint_err = vec(maximum(endpoint_err, dims=1)) # for each piece.
+max_interval_err = vec(maximum(interval_err, dims=1)) # for each piece.
+table = Table(
+    piece = 1:length(orders),
+    orders = orders,
+    endpoint_error = max_endpoint_err,
+    interval_error = max_interval_err,
+    step_size = sol.steps,
+)
 display(table)
+
+@show eps(Float64)
+@show maximum(interval_err)
+@show maximum(endpoint_err)
+@show maximum(xu0_err) # zero, since PSM is based on this relation.
+@show maximum(xuh_err-endpoint_err) # should be 0.
+# use either xuh_err or endpoint_err. they are the same due to initial condition carry-over. xuh_err does not require starting a new piece.
+
+max_err_x_order_set = collect( maximum(endpoint_err_x[i]) for i in eachindex(endpoint_err_x) )
+min_err_x_order_set = collect( minimum(endpoint_err_x[i]) for i in eachindex(endpoint_err_x) )
+@show min_err_x_order_set
+@show max_err_x_order_set
+
+max_err_u_order_set = collect( maximum(endpoint_err_u[i]) for i in eachindex(endpoint_err_u) )
+min_err_u_order_set = collect( minimum(endpoint_err_u[i]) for i in eachindex(endpoint_err_u) )
+@show min_err_u_order_set
+@show max_err_u_order_set
+println()
 
 # I am here. devise strategy based on the derivaitve continuity to control step size
 # and order increases.
 # Need Lipschitz continuous on d( f ∘ R ), so this is kind of important!!
 # check where in the proof we need this condition, and see if we can get away with it...
+
+PyPlot.figure(fig_num)
+fig_num += 1
+
+PyPlot.plot(orders, max_endpoint_err, "x")
+
+PyPlot.xlabel("order")
+PyPlot.ylabel("abs(dx_n - u_{n+1}) error")
+PyPlot.title("error vs. order")
 
 @assert 555==4
 
