@@ -80,78 +80,10 @@ function computeerrorratio(
     return error_ratio
 end
 
-# function computemaxerror(
-#     cs::Vector{Vector{T}},
-#     h::T,
-#     N_analysis_terms::Integer,
-#     ) where T
-    
-#     max_error = convert(T, -Inf)
-#     ind = 1 # at least a default valid index, in case all computed errors are -Inf.
-
-#     for d in eachindex(cs)
-#         current_error = computeerror(cs[d], h, N_analysis_terms)
-
-#         if current_error > max_error
-#             ind = d
-#             max_error = current_error
-#         end
-#     end
-
-#     return max_error, ind
-# end
-
-# function computemaxerror!(
-#     error_buffer::Vector{T},
-#     cs::Vector{Vector{T}},
-#     h::T,
-#     N_analysis_terms::Integer,
-#     ) where T
-    
-#     resize!(error_buffer, length(cs))
-
-#     for d in eachindex(cs)
-#         error_buffer[d] = computeerror(cs[d], h, N_analysis_terms)
-#     end
-
-#     max_error, ind = findmax(error_buffer)
-
-#     return max_error, ind
-# end
-
 
 
 ############ step size
 
-# # try all methods, and choose smallest.
-# function choosestepsize(
-#     ϵ::T,
-#     p::GeodesicIVPBuffer,
-#     ::MinAllStep;
-#     h_max = one(T),
-#     step_reduction_factor = 2,
-#     )::T where T
-
-#     h1 = choosestepsize(
-#         ϵ,
-#         p,
-#         XUStepStragey();
-#         h_max = h_max,
-#         step_reduction_factor = step_reduction_factor,
-#     )
-
-#     h2 = choosestepsize(
-#         ϵ,
-#         p,
-#         GuentherWolfStep();
-#         h_max = h_max,
-#         step_reduction_factor = step_reduction_factor,
-#     )
-
-#     h = min(h2, h1)
-
-#     return h
-# end
 
 # eq:choose_ODE_step_size. An h_max of Inf means if no higher-order errors are computed, then we assume the model is exact, thus any step is valid. This means the maximum step for which the Taylor polynomial is valid is Inf.
 function choosestepsizeunivariate(
@@ -231,4 +163,113 @@ function choosestepsize(
     end
 
     return min_h
+end
+
+
+########### continuity error
+
+# if continuity conditions fail, mutates sol and eval_buffer.
+function continuitycheck!(
+    sol::PiecewiseTaylorPolynomial{T},
+    eval_buffer::GeodesicEvaluation{T},
+    #prob::GeodesicIVPBuffer,
+    pt_trait::PT,
+    metric_params::MT,
+    config::ContinuityConfig{T},
+    ) where {T,PT,MT}
+
+    min_h = config.min_h
+    discount_factor = config.discount_factor
+
+    # get initial conditions for the next piece.
+    t0_current = sol.t_expansion[end]
+    h_current = sol.steps[end]
+    t0_next = t0_current + h_current
+    evalsolution!(eval_buffer, pt_trait, sol.coefficients[end], t0_next, t0_current)
+
+    # solve the test solution for the next piece.
+    prob = getivpbuffer(
+        metric_params,
+        eval_buffer.position,
+        eval_buffer.velocity,
+        eval_buffer.vector_fields,
+    )
+    getfirstorder!(prob, pt_trait) # this brings the solution to order 1.
+    
+    # check if x_dot_current(t0_next) and u0 agrees.
+    pass_flag = continuitycheck(eval_buffer.velocity, prob.x.c, config)
+    
+    ϵ = config.ϵ
+    err = convert(T, Inf)
+    while err > ϵ && h_current > min_h
+        # redo the test solution with a smaller current step.
+
+        h_current = h_current * discount_factor
+        
+        prob = getivpbuffer(
+            metric_params,
+            eval_buffer.position,
+            eval_buffer.velocity,
+            eval_buffer.vector_fields,
+        )
+        getfirstorder!(prob, pt_trait)
+        
+        #pass_flag = continuitycheckxuunsimplified(eval_buffer.velocity, prob.x.c, config)
+        err = continuitymaxerrorhigher(h, c, c_next, m)
+        # I am here.
+        
+    end
+
+    if h_current < min_h
+        return h_urrent, prob, :try_again_with_decreased_order_need_to_get_starting_h_again
+    end
+
+    return h_current, prob, :clear_to_proceed
+end
+
+
+
+# function continuitycheckxuunsimplified(
+#     next_u0::Vector{T},
+#     next_x::Vector{Vector{T}},
+#     config::ContinuityConfig{T},
+#     ) where T
+
+#     # joint checks: 1st order of x should be 0th order of u. If the first-order IVP we solve was derived from a higher-order IVP, then we need to do this type of check.
+#     #err = maximum( abs(sol_eval.velocity[d] - next_piece.x[d][begin+1]) for d in eachindex(sol_eval.velocity) )
+#     err = maximum( abs(next_u0[d] - next_x[d][begin+1]) for d in eachindex(next_u0) )
+#     if err > config.ϵ
+#         return false
+#     end
+
+#     return true
+# end
+
+# for higher-order, m, derivatives.
+function continuitymaxerrorhigher(
+    h::T,
+    c::Vector{Vector{T}}
+    c_next::Vector{Vector{T}},
+    m::Integer,
+    ) where T
+    
+    @assert length(x) == length(x_next)
+
+    total_order = length(c[d])-1
+    @assert m < total_order
+
+    max_err = zero(T)
+
+    for d in eachindex(x)
+
+        err = c[d][begin+m]-c_next[d][begin+m]
+        for n = m+1:total_order
+            err += binomial(n,m)*c[d][begin+n]*h^(n-m) # TODO: use bino_mat look up table here
+        end
+
+        err = abs(err)
+        max_err = max(err, min_err)
+    end
+
+    return max_err
 end

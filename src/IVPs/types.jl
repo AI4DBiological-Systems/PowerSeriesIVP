@@ -147,8 +147,10 @@ end
 #     discrepancies::Matrix{T} # [order coefficient index][variable dimension]
 # end
 struct ContinuityConfig{T}
-    zero_tol::T # above 0.
+    ϵ::T # above 0.
     min_h::T # above 0.
+    max_h::T
+    order_change_threshold::T # min_h < order_change_threshold < max_h.
     discount_factor::T # in the interval (0,1).
 end
 
