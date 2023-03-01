@@ -4,7 +4,7 @@
 #     h_initial::T
 #     L_test_max::Int
 #     r_order::T
-#     h_zero_error::T
+#     h_max::T
 #     step_reduction_factor::T
 #     max_pieces::Int
 #     N_analysis_terms::Int
@@ -16,7 +16,7 @@
 #     h_initial = one(T),
 #     L_test_max::Int = convert(Int, 10),
 #     r_order = convert(T, 0.3),
-#     h_zero_error = convert(T, Inf),
+#     h_max = convert(T, 1),
 #     step_reduction_factor = convert(T, 2),
 #     max_pieces::Int = typemax(Int),
 #     N_analysis_terms::Int = convert(Int, 2),
@@ -27,7 +27,7 @@
 #         convert(T, h_initial),
 #         convert(Int, L_test_max),
 #         convert(T, r_order),
-#         convert(T, h_zero_error),
+#         convert(T, h_max),
 #         convert(T, step_reduction_factor),
 #         convert(Int, max_pieces),
 #         convert(Int, N_analysis_terms),
@@ -179,7 +179,7 @@ end
 # no checking against interval of validity here. That responsibility is on the calling routine.
 function evalsolution!(
     out::GeodesicEvaluation{T},
-    _::DisableParallelTransport,
+    ::DisableParallelTransport,
     c::GeodesicPiece{T},
     t,
     a,
@@ -200,7 +200,7 @@ end
 # no checking against interval of validity here. That responsibility is on the calling routine.
 function evalsolution!(
     out::GeodesicEvaluation{T},
-    _::EnableParallelTransport,
+    ::EnableParallelTransport,
     c::GeodesicPiece{T},
     t,
     a,
@@ -485,7 +485,7 @@ function solvesegmentIVP!(
     #     ϵ = config.ϵ,
     #     L_test_max = config.L_test_max,
     #     r_order = config.r_order,
-    #     h_zero_error = config.h_zero_error,
+    #     h_max = config.h_max,
     #     N_analysis_terms = config.N_analysis_terms,
     # )
     

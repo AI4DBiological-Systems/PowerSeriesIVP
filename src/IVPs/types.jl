@@ -47,6 +47,13 @@ struct EnableParallelTransport <: ParallelTransportTrait end
 abstract type GeodesicIVPBuffer end
 # sutypes of GeodesicIVPBuffer are defined in RQ22.jl
 
+##### adaptive step
+abstract type StepStrategyTrait end
+
+struct VelocityContinuityStep <: StepStrategyTrait end # for geodesic problems.
+struct GuentherWolfStep <: StepStrategyTrait end # for any ODE IVP.
+#struct MinAllStep <: StepStrategyTrait end # for geodesic problems.
+
 ##### configs.
 
 abstract type IVPConfig end
@@ -54,7 +61,7 @@ abstract type IVPConfig end
 # still adapts step.
 struct FixedOrderConfig{T} <: IVPConfig
     ϵ::T
-    h_zero_error::T
+    h_max::T
     L::Int
 
     # IVP-related
@@ -65,7 +72,7 @@ end
 function FixedOrderConfig(
     ::Type{T};
     ϵ::Real = 1e-6,
-    h_zero_error::Real = Inf,
+    h_max::Real = Inf,
     L::Integer = 10,
     max_pieces::Integer = typemax(Int),
     step_reduction_factor = 2,
@@ -73,7 +80,7 @@ function FixedOrderConfig(
 
     return FixedOrderConfig(
         convert(T, ϵ),
-        convert(T, h_zero_error),
+        convert(T, h_max),
         convert(Int, L),
         convert(T, step_reduction_factor),
         convert(Int, max_pieces),
@@ -86,7 +93,7 @@ struct AdaptOrderConfig{T} <: IVPConfig
     L_min::Int
     L_max::Int # L_test_max
     r_order::T
-    h_zero_error::T
+    h_max::T
     N_analysis_terms::Int
 
     # IVP-related
@@ -104,7 +111,7 @@ function AdaptOrderConfig(
     L_min::Int = 4,
     L_max::Int = convert(Int, 10),
     r_order = convert(T, 0.3),
-    h_zero_error = convert(T, Inf),
+    h_max = convert(T, 1),
     N_analysis_terms::Int = convert(Int, 2),
     max_pieces::Integer = typemax(Int),
     step_reduction_factor = 2,
@@ -121,7 +128,7 @@ function AdaptOrderConfig(
         convert(Int, L_min),
         convert(Int, L_max),
         convert(T, r_order),
-        convert(T, h_zero_error),
+        convert(T, h_max),
         convert(Int, N_analysis_terms),
         convert(T, step_reduction_factor),
         convert(Int, max_pieces),

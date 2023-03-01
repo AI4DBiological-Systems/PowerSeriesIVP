@@ -17,6 +17,7 @@ include("./composite_funcs/integral_seq.jl")
 include("./IVPs/types.jl")
 include("./IVPs/RQ22.jl")
 include("./IVPs/geodesic_engine.jl")
+include("./IVPs/adaptive_strategy.jl")
 include("./IVPs/engine.jl") # move contents and rename this file.
 include("./IVPs/utils.jl")
 

@@ -61,7 +61,7 @@ T = Float64
 #     L_test_max = 10,
 #     #L_test_max = 30,
 #     r_order = 0.3,
-#     h_zero_error = Inf,
+#     h_max = one(T),
 #     step_reduction_factor = 2.0,
 #     max_pieces = 100000000,
 # )
@@ -84,7 +84,7 @@ config = PowerSeriesIVP.AdaptOrderConfig(
     ϵ = 1e-6,
     L_test_max = 10, # increase this for maximum higher-order power series.
     r_order = 0.3,
-    h_zero_error = Inf,
+    h_max = one(T),
     step_reduction_factor = 2.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
     N_analysis_terms = 2,

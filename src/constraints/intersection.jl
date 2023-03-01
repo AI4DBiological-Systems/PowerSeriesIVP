@@ -109,7 +109,7 @@
 #                 h = choosestepsize(
 #                     ϵ,
 #                     p.x.c[error_var_ind];
-#                     h_zero_error = h_zero_error,
+#                     h_max = h_max,
 #                     step_reduction_factor = step_reduction_factor,
 #                 )
 

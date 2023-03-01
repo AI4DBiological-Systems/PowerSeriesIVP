@@ -34,12 +34,12 @@ N_analysis_terms = 3
 
 adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
     Float64;
-    ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
-    #ϵ = 1e-6,
+    #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
+    ϵ = 1e-6,
     L_min = L_min,
     L_max = L_max, # increase this for maximum higher-order power series.
     r_order = 0.3, # lower means higher-order, fewer pieces. very sensitive around 0.1 to 0.3.
-    h_zero_error = Inf,
+    h_max = 1.0,
     step_reduction_factor = 2.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
     N_analysis_terms = N_analysis_terms,
@@ -50,7 +50,7 @@ fixed_order_config = PowerSeriesIVP.FixedOrderConfig(
     #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
     ϵ = 1e-6,
     L = Lm1_fixed, # actual order is L+1.
-    h_zero_error = Inf,
+    h_max = 1.0,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
 )
 
@@ -290,6 +290,101 @@ PyPlot.plot(orders, max_endpoint_err, "x")
 PyPlot.xlabel("order")
 PyPlot.ylabel("abs(dx_n - u_{n+1}) error")
 PyPlot.title("error vs. order")
+
+## verify my equation for the step inequality from notes.
+
+d = d_select
+piece_select = 3
+c_x = sol.coefficients[piece_select].x
+c_u = sol.coefficients[piece_select].u
+
+c_x_next = sol.coefficients[piece_select+1].x
+c_u_next = sol.coefficients[piece_select+1].u
+
+t0 = sol.expansion_points[piece_select]
+h = sol.steps[piece_select]
+t_next = t0 + h
+
+dx_coefficients = Vector{Float64}(undef, 0)
+PowerSeriesIVP.differentiatepolynomial!(dx_coefficients, c_x[d])
+
+#endpoint_err1 = abs(PowerSeriesIVP.evaltaylor(dx_coefficients, t_next, t0) - c_u_next[d][begin])
+# shold be the same as endpoint_err1
+xuh_err1 = abs(PowerSeriesIVP.evaltaylor(dx_coefficients, t_next, t0) - PowerSeriesIVP.evaltaylor(c_u[d], t_next, t0))
+#xuh_err1 = abs(PowerSeriesIVP.evaltaylordirect(dx_coefficients, t_next, t0) - PowerSeriesIVP.evaltaylordirect(c_u[d], t_next, t0))
+
+
+
+b = c_u[d_select]
+c = c_x[d_select]
+
+dx_h = PowerSeriesIVP.evaltaylordirect(dx_coefficients, t_next, t0)
+dx_h_AN = sum( n*c[begin+n]*h^(n-1) for n = 1:length(c)-1 ) # same as above.
+@show abs(dx_h - dx_h_AN)
+
+u_h = PowerSeriesIVP.evaltaylordirect(c_u[d], t_next, t0)
+u_h_AN = sum( b[begin+n]*h^n for n = 1:length(b)-1 )+b[begin] # same as above.
+@show abs(u_h - u_h_AN)
+@show abs( xuh_err1 - abs(dx_h - u_h) )
+
+
+function geterrlastline(h, b::Vector{T}) where T
+    B = zero(T)
+    L = length(b)-1
+
+    for n = 2:L
+        B += b[begin+n-1]*h^(n-1) - b[begin+n]*h^n
+    end
+    B = B-b[begin+1]*h
+
+    return B
+end
+
+function geterrfirstline(h, b::Vector{T}, c::Vector{T}) where T
+    
+    L = length(b)-1
+
+    B = sum( ( n*c[begin+n]*h^(n-1) - b[begin+n]*h^n ) for n = 1:L ) -b[begin]
+    # dx_h_AN = sum( n*c[begin+n]*h^(n-1) for n = 1:length(c)-1 )
+    # u_h_AN = sum( b[begin+n]*h^n for n = 1:length(b)-1 )+b[begin]
+    # B = dx_h_AN- u_h_AN
+
+    return B
+end
+
+# don't forget that xuh_err1 has abs, so need to take abs() when comparing with geterr-first /last lines.
+@show abs(geterrlastline(h, b) - geterrfirstline(h, b, c))
+@show abs(abs(geterrfirstline(h, b, c)) - xuh_err1)
+@show abs(abs(geterrlastline(h, b)) - xuh_err1)
+L = length(b)-1
+@show abs( abs(b[end]*h^L) - xuh_err1 )
+
+println("This is a key simplification")
+@show abs( -b[end]*h^L -geterrfirstline(h, b, c) )
+
+ϵ = 1e-6
+h_old = PowerSeriesIVP.stepsizeformula(ϵ, c[end], length(c)-1)
+
+function newstepfunc(ϵ, x, order)
+    return (ϵ/abs(x))^(1/order)
+end
+h_new = newstepfunc(ϵ, b[end], length(b)-1)
+
+h_news = collect( newstepfunc(ϵ, b[end-m], length(b)-1-m) for m = 0:L-1)
+h_orders = collect( length(b)-1-m for m = 0:L-1 )
+
+@show h_new, geterrfirstline(h_new, b, c)
+@show h_old, geterrfirstline(h_old, b, c)
+
+f = hh->geterrfirstline(hh, b, c)
+display( [h_orders f.(h_news)] )
+
+## we arrive at the old step rule.
+# julia> PowerSeriesIVP.stepsizeformula(1e-6,b[end],length(b)-1)
+# 0.5162609891145944
+
+# julia> newstepfunc(1e-6/2, b[end], length(b)-2)
+# 0.5162609891145944
 
 @assert 555==4
 

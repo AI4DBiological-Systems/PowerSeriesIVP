@@ -171,7 +171,7 @@ end
 ## new.
 
 function refinestepnumerical!(
-    _::NoConstraints,
+    ::NoConstraints,
     h::T,
     args...
     )::Tuple{T,Int} where T <: AbstractFloat

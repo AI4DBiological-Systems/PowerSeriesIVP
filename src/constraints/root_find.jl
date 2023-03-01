@@ -268,7 +268,7 @@ end
 
 # front end.
 function refinestep!(
-    _::NoConstraints,
+    ::NoConstraints,
     h::T,
     args...
     )::Tuple{T,Int} where T <: AbstractFloat
