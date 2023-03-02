@@ -29,28 +29,39 @@ v0_set = collect( rand(N_vars) for _ = 1:N_parallel_vector_fields)
 
 L_min = 4
 L_max = 21
-N_analysis_terms = 3
+#N_analysis_terms = 3
 #L_max = L_max + N_analysis_terms
 
-adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
-    Float64;
+strategy = PowerSeriesIVP.ContinuitySecondDerivative(
+    PowerSeriesIVP.GuentherWolfStep(),
+)
+# strategy = PowerSeriesIVP.ContinuitySecondDerivative(
+#     PowerSeriesIVP.VelocityContinuityStep(),
+# )
+# strategy = PowerSeriesIVP.GuentherWolfStep()
+# strategy = PowerSeriesIVP.VelocityContinuityStep()
+
+step_config = PowerSeriesIVP.StepConfig(
+    Float64,
+    strategy;
     #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
     ϵ = 1e-6,
+    h_max = Inf,
+    reduction_factor = 1,
+    discount_factor = 0.9,        
+)
+
+adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
+    step_config;
     L_min = L_min,
     L_max = L_max, # increase this for maximum higher-order power series.
-    r_order = 0.3, # lower means higher-order, fewer pieces. very sensitive around 0.1 to 0.3.
-    h_max = 1.0,
-    step_reduction_factor = 2.0,
+    order_increase_factor = 1.35,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
-    N_analysis_terms = N_analysis_terms,
 )
-Lm1_fixed = 4
+L_fixed = 4
 fixed_order_config = PowerSeriesIVP.FixedOrderConfig(
-    Float64;
-    #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
-    ϵ = 1e-6,
-    L = Lm1_fixed, # actual order is L+1.
-    h_max = 1.0,
+    step_config;
+    L = L_fixed,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.
 )
 
@@ -59,7 +70,7 @@ config = adaptive_order_config
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
 prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
 constraints_info = PowerSeriesIVP.NoConstraints()
-sol = PowerSeriesIVP.solveIVP(
+sol, exit_flag = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
@@ -70,23 +81,45 @@ sol = PowerSeriesIVP.solveIVP(
     constraints_info = constraints_info,
 )
 
-# @btime PowerSeriesIVP.solveIVP(
+
+# (c_x, c_u, next_x, next_u, h) = ([[-0.40243248293794137, -0.9754736537655263, -0.028283214576385357, 0.008649894756430094, 0.005392191906369124], [0.8540414903329187, -0.341379056315598, -0.1582639812836908, -0.032351280660213325, 0.003273286430183644], [-0.6651248667822778, -1.0410555755312705, 0.003524793084258744, 0.014106457829175854, 0.004967531777339607]], [[-0.9754736537655263, -0.056566429152770714, 0.02594968426929028, 0.021568767625476496, 0.0009422561798294823], [-0.341379056315598, -0.3165279625673816, -0.09705384198063997, 0.013093145720734577, 0.011047314839612375], [-1.0410555755312705, 0.007049586168517488, 0.04231937348752756, 0.019870127109358426, -0.0013052033827502707]], [[-0.40707354090780734, -0.9757421559656958, -0.02815903716542786], [0.852413933441089, -0.34288700416659107, -0.15872522860720406], [-0.6700771836505584, -1.0410210801714856, 0.003726784484356198]], [[-0.9757421559656958, -0.05631807433085572, 0.026257624356730923], [-0.34288700416659107, -0.3174504572144081, -0.09686548487608504], [-1.0410210801714856, 0.007453568968712396, 0.042602766460731106]], 0.004757092965693477)
+# xd = tt->PowerSeriesIVP.evaltaylorAD(c_x[1], tt, 0.0)
+# xnd = tt->PowerSeriesIVP.evaltaylorAD(next_x[1], tt, 0.0)
+# und = tt->PowerSeriesIVP.evaltaylorAD(next_u[1], tt, 0.0)
+# ud = tt->PowerSeriesIVP.evaltaylorAD(c_u[1], tt, 0.0)
+#
+# # same.
+# xnd_0 = ForwardDiff.derivative(xnd, 0.0)
+# und(0.0)
+#
+# # almost same.
+# ud(h)
+# und(0.0)
+#
+# # discrepancy.
+# xd_h = ForwardDiff.derivative(xd, h)
+# xnd_0 = ForwardDiff.derivative(xnd, 0.0)
+#@assert 1==23
+
+# @btime sol, exit_flag = PowerSeriesIVP.solveIVP(
 #     prob_params,
 #     PowerSeriesIVP.EnableParallelTransport(),
-#     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
-#     # h_initial,
 #     t_start,
 #     t_fin,
 #     config;
-#     h_initial = 1.0
+#     constraints_info = constraints_info,
 # );
+# @show length(sol.coefficients)
+# orders = PowerSeriesIVP.getpieceorders(sol)
 # @assert 1==2
-# # 1.995 ms (21716 allocations: 3.17 MiB) using adaptive config.
-# # 24.307 ms (419958 allocations: 29.75 MiB) using 4th order.
+# # ContinuitySecondDerivative, GuentherWolfStep:
+# # 3.231 ms (19791 allocations: 2.23 MiB) # using adaptive config.
+# # 14.415 ms (211695 allocations: 14.98 MiB #  using 4th order.
+# @assert 1==23
 
 config2 = adaptive_order_config
 prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, 2 .* u0, v0_set)
-sol2 = PowerSeriesIVP.solveIVP(
+sol2, exit_flag2 = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
@@ -102,6 +135,7 @@ println("The min and max orders of the solution pieces:")
 @show minimum(orders), maximum(orders)
 
 println("The number of solution pieces: ", length(sol.coefficients))
+#@assert 1==2
 
 #### visualize trajectory.
 

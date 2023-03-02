@@ -31,54 +31,54 @@ function computeerror(
     return abs(sum( c[begin+n]*h^(n-1) for n = (L+1):order ))
 end
 
-# based on sum error formula in my notes.
-function computeerrorratio(
-    step_trait::StepStrategyTrait,
-    p::GeodesicIVPBuffer,
-    ϵ::T,
-    N_analysis_terms::Integer;
-    h_max = one(T),
-    step_reduction_factor = 2,
-    )::T where T
+# # based on sum error formula in my notes.
+# function computeerrorratio(
+#     step_trait::StepStrategyTrait,
+#     p::GeodesicIVPBuffer,
+#     ϵ::T,
+#     N_analysis_terms::Integer;
+#     h_max = one(T),
+#     step_reduction_factor = 2,
+#     )::T where T
     
-    order = length(p.x.c[begin])
-    @assert order > N_analysis_terms > 0
+#     order = length(p.x.c[begin])
+#     @assert order > N_analysis_terms > 0
 
-    M = order - N_analysis_terms
+#     M = order - N_analysis_terms
     
-    a = choosestepsize(
-        step_trait,
-        #GuentherWolfStep(),
-        ϵ,
-        p;
-        order = M, # I am here.
-        h_max = h_max,
-        step_reduction_factor = step_reduction_factor,
-    )
+#     a = choosestepsize(
+#         step_trait,
+#         #GuentherWolfStep(),
+#         ϵ,
+#         p;
+#         order = M, # I am here.
+#         h_max = h_max,
+#         step_reduction_factor = step_reduction_factor,
+#     )
 
-    b = choosestepsize(
-        step_trait,
-        #GuentherWolfStep(),
-        ϵ,
-        x;
-        order = M-1, # I am here
-        h_max = h_max,
-        step_reduction_factor = step_reduction_factor,
-    )
+#     b = choosestepsize(
+#         step_trait,
+#         #GuentherWolfStep(),
+#         ϵ,
+#         x;
+#         order = M-1, # I am here
+#         h_max = h_max,
+#         step_reduction_factor = step_reduction_factor,
+#     )
 
-    numerator = zero(T)
-    denominator = zero(T)
-    for d in eachindex(x)
+#     numerator = zero(T)
+#     denominator = zero(T)
+#     for d in eachindex(x)
         
-        x_d = x[d]
+#         x_d = x[d]
 
-        numerator += abs(sum( x_d[end-n+1]*a^(n-1) for n = 1:N_analysis_terms ))
-        denominator += abs(sum( x_d[end-1-n]*b^(n-1) for n = 1:N_analysis_terms ))
-    end
-    error_ratio = (numerator*a^M)/(denominator*b^(M-1))
+#         numerator += abs(sum( x_d[end-n+1]*a^(n-1) for n = 1:N_analysis_terms ))
+#         denominator += abs(sum( x_d[end-1-n]*b^(n-1) for n = 1:N_analysis_terms ))
+#     end
+#     error_ratio = (numerator*a^M)/(denominator*b^(M-1))
 
-    return error_ratio
-end
+#     return error_ratio
+# end
 
 
 
@@ -140,7 +140,7 @@ function stepsizeformulaGuentherWolf(ϵ::T, x::T, L::Integer)::T where T
 end
 
 function choosestepsize(
-    step_trait::StepStrategyTrait,
+    step_trait::NonProbingStep,
     ϵ::T,
     p::GeodesicIVPBuffer;
     h_max = one(T),
@@ -166,110 +166,213 @@ function choosestepsize(
 end
 
 
-########### continuity error
+function choosestepsize(
+    ::AllNonProbingStep,
+    ϵ::T,
+    p::GeodesicIVPBuffer;
+    h_max = one(T),
+    step_reduction_factor = 2,
+    )::T where T
+
+    h1 = choosestepsize(
+        GuentherWolfStep(),
+        ϵ,
+        p;
+        h_max = h_max,
+        step_reduction_factor = step_reduction_factor,
+    )
+
+    h2 = choosestepsize(
+        GuentherWolfStep(),
+        ϵ,
+        p;
+        h_max = h_max,
+        step_reduction_factor = step_reduction_factor,
+    )
+
+    if !isfinite(h1)
+        h1 = convert(T, Inf)
+    end
+
+    if !isfinite(h2)
+        h2 = convert(T, Inf)
+    end
+
+    min_h = min(h1,h2)
+
+    if isfinite(min_h)
+        return min_h
+    end
+
+    return zero(T)
+end
+
+########## general.
+
+function choosestepsize!(
+    ::GeodesicIVPBuffer,
+    ::GeodesicEvaluation{T},
+    ::NonProbingStep,
+    prob::GeodesicIVPBuffer,
+    t0,
+    config::StepConfig,
+    ) where T
+
+    h = choosestepsize(
+        config.strategy,
+        config.ϵ,
+        prob,
+        h_max = config.h_max,
+        step_reduction_factor = config.reduction_factor,
+    )
+
+    return h
+end
+
+########## continuity error
 
 # if continuity conditions fail, mutates sol and eval_buffer.
-function continuitycheck!(
-    sol::PiecewiseTaylorPolynomial{T},
+function choosestepsize!(
+    test_IVP::GeodesicIVPBuffer,
     eval_buffer::GeodesicEvaluation{T},
-    #prob::GeodesicIVPBuffer,
-    pt_trait::PT,
-    metric_params::MT,
-    config::ContinuityConfig{T},
-    ) where {T,PT,MT}
+    ::DerivativeContinuityStep,
+    prob::GeodesicIVPBuffer,
+    t0::T,
+    config::StepConfig,
+    ) where T
 
-    min_h = config.min_h
+    # set up.
+    ϵ = config.ϵ
     discount_factor = config.discount_factor
+    c_x = prob.x.c
+    c_u = prob.u.c
+    step_strategy = config.strategy
 
-    # get initial conditions for the next piece.
-    t0_current = sol.t_expansion[end]
-    h_current = sol.steps[end]
-    t0_next = t0_current + h_current
-    evalsolution!(eval_buffer, pt_trait, sol.coefficients[end], t0_next, t0_current)
+    # first try: use continuity of dx/dt at t=h vs. u(h).
+    h = choosestepsize(
+        step_strategy.first_step_strategy,
+        ϵ,
+        prob,
+        h_max = config.h_max,
+        step_reduction_factor = config.reduction_factor,
+    )
 
-    # solve the test solution for the next piece.
-    prob = getivpbuffer(
-        metric_params,
+    #return h
+
+    # get test piece.
+    t0_next = h + t0
+    #evalsolution!(eval_buffer, DisableParallelTransport(), sol.coefficients[end], t0_next, t0)
+    evalsolution!(eval_buffer, c_x, c_u, t0_next, t0)
+
+    resetbuffer!(
+        test_IVP,
+        DisableParallelTransport(),
         eval_buffer.position,
         eval_buffer.velocity,
-        eval_buffer.vector_fields,
     )
-    getfirstorder!(prob, pt_trait) # this brings the solution to order 1.
-    
-    # check if x_dot_current(t0_next) and u0 agrees.
-    pass_flag = continuitycheck(eval_buffer.velocity, prob.x.c, config)
-    
-    ϵ = config.ϵ
-    err = convert(T, Inf)
-    while err > ϵ && h_current > min_h
-        # redo the test solution with a smaller current step.
+    getfirstorder!(test_IVP, DisableParallelTransport()) # this brings the solution of test_IVP to order 1.
+    increaseorder!(test_IVP, DisableParallelTransport()) # bring to order 2.
 
-        h_current = h_current * discount_factor
+    # get error.
+    err = getcontinuityerror(step_strategy, h, c_x, test_IVP.x.c)
+    #@assert 3==4
+
+    while err > ϵ
+        # redo the test solution with a smaller current step.
+        h = h * discount_factor
         
-        prob = getivpbuffer(
-            metric_params,
+        # get test piece.
+        t0_next = h + t0
+        evalsolution!(eval_buffer, c_x, c_u, t0_next, t0)
+
+        resetbuffer!(
+            test_IVP,
+            DisableParallelTransport(),
             eval_buffer.position,
             eval_buffer.velocity,
-            eval_buffer.vector_fields,
         )
-        getfirstorder!(prob, pt_trait)
-        
-        #pass_flag = continuitycheckxuunsimplified(eval_buffer.velocity, prob.x.c, config)
-        err = continuitymaxerrorhigher(h, c, c_next, m)
-        # I am here.
-        
+        getfirstorder!(test_IVP, DisableParallelTransport()) # this brings the solution of test_IVP to order 1.
+        increaseorder!(test_IVP, DisableParallelTransport()) # bring to order 2.
+
+        # get error.
+        err = getcontinuityerror(step_strategy, h, c_x, test_IVP.x.c)
     end
 
-    if h_current < min_h
-        return h_urrent, prob, :try_again_with_decreased_order_need_to_get_starting_h_again
-    end
-
-    return h_current, prob, :clear_to_proceed
+    return h
 end
 
 
+function getcontinuityerror(
+    ::ContinuityFirstDerivative,
+    h::T,
+    c::Vector{Vector{T}},
+    c_next::Vector{Vector{T}},
+    )::T where T
+    
+    return getscalederror(h, c, c_next, 1)
+end
 
-# function continuitycheckxuunsimplified(
+function getcontinuityerror(
+    ::ContinuitySecondDerivative,
+    h::T,
+    c::Vector{Vector{T}},
+    c_next::Vector{Vector{T}},
+    )::T where T
+    
+    err1 = getscalederror(h, c, c_next, 1)
+    err2 = getscalederror(h, c, c_next, 1)
+    return err1 + err2*2
+end
+
+function getcontinuityerror(
+    step_strategy::ContinuityHigherDerivative,
+    h::T,
+    c::Vector{Vector{T}},
+    c_next::Vector{Vector{T}},
+    )::T where T
+    
+    return sum( getscalederror(h, c, c_next, m)*factorial(m) for m = 1:step_strategy.max_order )
+end
+
+# continuity for higher-order, m, derivatives.
+function getscalederror(
+    h::T,
+    c::Vector{Vector{T}},
+    c_next::Vector{Vector{T}},
+    m::Integer,
+    ) where T
+    
+    @assert length(c) == length(c_next)
+    @assert !isempty(c)
+
+    total_order = length(c[begin])-1
+    @assert m < total_order
+
+    max_scaled_err = zero(T)
+
+    for d in eachindex(c)
+
+        scaled_difference = c[d][begin+m]-c_next[d][begin+m]
+        for n = m+1:total_order
+            scaled_difference += binomial(n,m)*c[d][begin+n]*h^(n-m) # TODO: use bino_mat look up table here
+        end
+
+        #@show abs(scaled_difference)
+        max_scaled_err = max(abs(scaled_difference), max_scaled_err)
+    end
+
+    return max_scaled_err
+end
+
+# # continuity for derivative.
+# function continuitycheck1st(
 #     next_u0::Vector{T},
 #     next_x::Vector{Vector{T}},
-#     config::ContinuityConfig{T},
 #     ) where T
 
 #     # joint checks: 1st order of x should be 0th order of u. If the first-order IVP we solve was derived from a higher-order IVP, then we need to do this type of check.
 #     #err = maximum( abs(sol_eval.velocity[d] - next_piece.x[d][begin+1]) for d in eachindex(sol_eval.velocity) )
 #     err = maximum( abs(next_u0[d] - next_x[d][begin+1]) for d in eachindex(next_u0) )
-#     if err > config.ϵ
-#         return false
-#     end
-
-#     return true
-# end
-
-# for higher-order, m, derivatives.
-function continuitymaxerrorhigher(
-    h::T,
-    c::Vector{Vector{T}}
-    c_next::Vector{Vector{T}},
-    m::Integer,
-    ) where T
     
-    @assert length(x) == length(x_next)
-
-    total_order = length(c[d])-1
-    @assert m < total_order
-
-    max_err = zero(T)
-
-    for d in eachindex(x)
-
-        err = c[d][begin+m]-c_next[d][begin+m]
-        for n = m+1:total_order
-            err += binomial(n,m)*c[d][begin+n]*h^(n-m) # TODO: use bino_mat look up table here
-        end
-
-        err = abs(err)
-        max_err = max(err, min_err)
-    end
-
-    return max_err
-end
+#     return err
+# end

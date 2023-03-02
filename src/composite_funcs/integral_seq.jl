@@ -1,10 +1,10 @@
 # uses the fundamental theorem of calculus to get a first-derivative's power series without numerical integration.
-struct IntegralSequence{T}
+struct IntegralSequence{T} <: SingleVariableTrait
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function IntegralSequence(::Type{T}, N::Integer)::IntegralSequence{T} where T
-    return IntegralSequence(initializecoefficients(T, N))
+    return IntegralSequence(allocatecoefficients(T, N))
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.

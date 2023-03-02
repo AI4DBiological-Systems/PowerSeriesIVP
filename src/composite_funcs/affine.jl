@@ -1,9 +1,9 @@
-struct AddConstant{T}
+struct AddConstant{T} <: SingleVariableTrait
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function AddConstant(::Type{T}, N::Integer) where T
-    return AddConstant(initializecoefficients(T,N))
+    return AddConstant(allocatecoefficients(T,N))
 end
 
 function initializeorder!(
@@ -59,7 +59,7 @@ struct Subtraction{T}
 end
 
 function Subtraction(::Type{T}, N::Integer)::Subtraction{T} where T
-    return Subtraction(initializecoefficients(T, N))
+    return Subtraction(allocatecoefficients(T, N))
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.
@@ -83,12 +83,12 @@ end
 
 #############
 
-struct Addition{T}
+struct Addition{T} <: SingleVariableTrait
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function Addition(::Type{T}, N::Integer)::Addition{T} where T
-    return Addition(initializecoefficients(T, N))
+    return Addition(allocatecoefficients(T, N))
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.
@@ -117,7 +117,7 @@ struct LinearOperation{T}
 end
 
 function LinearOperation(::Type{T}, N::Integer)::LinearOperation{T} where T
-    return LinearOperation(initializecoefficients(T, N))
+    return LinearOperation(allocatecoefficients(T, N))
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.
@@ -175,12 +175,12 @@ end
 
 ###
 
-struct SubtractFromScaled{T}
+struct SubtractFromScaled{T} <: SingleVariableTrait
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function SubtractFromScaled(::Type{T}, N::Integer)::SubtractFromScaled{T} where T
-    return SubtractFromScaled(initializecoefficients(T, N))
+    return SubtractFromScaled(allocatecoefficients(T, N))
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.

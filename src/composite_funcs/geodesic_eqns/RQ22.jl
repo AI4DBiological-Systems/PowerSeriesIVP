@@ -71,6 +71,38 @@ function RQ22θ(a::T, b::T, N::Integer)::RQ22θ{T} where T
     )
 end
 
+# does not reset A.a_sq, A.b_sq, A.a_sq_m_b_sq, which are constants to the IVP.
+function resetbuffer!(p::RQ22θ)
+    # stage 1.
+    resetbuffer!(p.delta)
+    resetbuffer!(p.W4)
+    resetbuffer!(p.W8)
+    resetbuffer!(p.A)
+    resetbuffer!(p.B)
+    resetbuffer!(p.R)
+
+    # stage 2
+    resetbuffer!(p.η)
+    resetbuffer!(p.C)
+    resetbuffer!(p.W9)
+
+    # stage 3
+    resetbuffer!(p.W3)
+    resetbuffer!(p.W5)
+    resetbuffer!(p.W1)
+
+    # stage 4
+    resetbuffer!(p.W6)
+    resetbuffer!(p.W7)
+    resetbuffer!(p.W2)
+
+    # du/dt
+    resetbuffer!(p.θ)
+    # A.c is A.θ.c, and should be reset by the previous line.
+
+    return nothing
+end
+
 function initializeorder!(
     p::RQ22θ{T},
     x::Vector{Vector{T}},
@@ -293,6 +325,7 @@ struct RQ22ParallelTransport{T}
     v0::Vector{T}
 end
 
+# does not create a copy of v0.
 function RQ22ParallelTransport(
     a::T,
     b::T,
@@ -333,6 +366,7 @@ struct RQ22IVPBuffer{T} <: GeodesicIVPBuffer # formally RQGeodesicBuffer{T}
 
 end
 
+# does not create a copy of x0, u0, v0_set.
 function getivpbuffer(
     metric_params::RQ22Metric{T},
     x0::Vector{T},
@@ -363,4 +397,24 @@ function getivpbuffer(
         x0, u0,
         #copy(x0), copy(u0), # the supplied initial conditions might be overwritten later. make a copy is safer.
     )
+end
+
+
+# used only for continuity test on x, which doesn't need the computation involving the parallel transported vector field solutions.
+# therefore, we ignore resetting the parallel transport field to reduce computation.
+function resetbuffer!(
+    p::RQ22IVPBuffer{T},
+    ::DisableParallelTransport,
+    x0::Vector{T},
+    u0::Vector{T},
+    ) where T
+
+    resetbuffer!(p.θ)
+    resetbuffer!(p.u)
+    resetbuffer!(p.x)
+
+    p.x0[:] = x0
+    p.u0[:] = u0
+
+    return nothing
 end

@@ -191,7 +191,3 @@ function getderivativediscrepancies(
     return xu0_err, xuh_err, endpoint_err, endpoint_err_x, endpoint_err_u, interval_err, orders
 end
 
-function evaltaylorAD(c, x, a)
-    τ = x-a
-    return sum( c[i]*τ^(i-1) for i in eachindex(c) )
-end

@@ -3,6 +3,7 @@ module PowerSeriesIVP
 using LinearAlgebra
 
 
+include("common_types.jl")
 
 include("./sequences/taylor.jl")
 include("./sequences/operators.jl")
@@ -14,19 +15,22 @@ include("./composite_funcs/quotient.jl")
 include("./composite_funcs/multivariate.jl")
 include("./composite_funcs/integral_seq.jl")
 
+include("./composite_funcs/geodesic_eqns/geodesic_types.jl")
+include("./composite_funcs/geodesic_eqns/RQ22.jl")
+
 include("./IVPs/types.jl")
-include("./IVPs/RQ22.jl")
-include("./IVPs/geodesic_engine.jl")
+include("./IVPs/methods.jl")
 include("./IVPs/adaptive_strategy.jl")
 include("./IVPs/engine.jl") # move contents and rename this file.
-include("./IVPs/utils.jl")
 
 include("./constraints/Budan_bracket.jl")
 include("./constraints/root_find.jl")
 include("./constraints/ITP.jl")
 
-
 include("./testing/continuity.jl")
+
+include("utils.jl")
+
 
  # front end for refining step in the constrained IVP case.
 #include("./constraints/intersection.jl")

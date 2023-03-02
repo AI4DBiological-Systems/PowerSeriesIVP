@@ -1,5 +1,11 @@
 
 
+# for testing and use with ForwardDiff.jl.
+function evaltaylorAD(c, x, a)
+    τ = x-a
+    return sum( c[i]*τ^(i-1) for i in eachindex(c) )
+end
+
 # use Polynomial.jl (possible large indirect dependencies) or implement horner's method to eval polynomials.
 function evaltaylordirect(c::Vector{T}, x::T, a)::T where T
     τ = x-a

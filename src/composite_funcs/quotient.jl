@@ -10,7 +10,15 @@ end
 
 function Reciprocal(::Type{T}, N::Integer)::Reciprocal{T} where T
 
-    return Reciprocal(initializecoefficients(T, N), initializecoefficients(T,N), initializecoefficients(T,N))
+    return Reciprocal(allocatecoefficients(T, N), allocatecoefficients(T,N), allocatecoefficients(T,N))
+end
+
+function resetbuffer!(A::Reciprocal)
+    
+    resetcoefficients!(A.c)
+    resetcoefficients!(A.b_tilde)
+    resetcoefficients!(A.α)
+    return nothing
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.
@@ -72,6 +80,14 @@ function ScaledReciprocal(::Type{T}, N::Integer)::ScaledReciprocal{T} where T
     return ScaledReciprocal(r, m, m.c)
 end
 
+function resetbuffer!(A::ScaledReciprocal)
+    resetbuffer!(A.buf_reciprocal)
+    resetbuffer!(A.buf_multiply_constant)
+    #A.c follows A.m.c, and should be reset from the previous line.
+    
+    return nothing
+end
+
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.
 function initializeorder!(
     A::ScaledReciprocal{T},
@@ -114,6 +130,14 @@ function Quotient(::Type{T}, N::Integer) where T
         buf_product,
         buf_product.c,
     )
+end
+
+function resetbuffer!(A::Quotient)
+    resetbuffer!(A.buf_reciprocal)
+    resetbuffer!(A.buf_product)
+    # A.c is A.buf_product.c, and should be reset by the previous line.
+
+    return nothing
 end
 
 # get the sequence for x/y, given the sequence for x and the sequence for y.

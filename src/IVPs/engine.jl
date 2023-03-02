@@ -1,336 +1,12 @@
 
-# struct IVPConfig{T}
-#     ϵ::T
-#     h_initial::T
-#     L_test_max::Int
-#     r_order::T
-#     h_max::T
-#     step_reduction_factor::T
-#     max_pieces::Int
-#     N_analysis_terms::Int
-# end
-
-# function IVPConfig(
-#     ::Type{T};
-#     ϵ::T = convert(T, 1e-6),
-#     h_initial = one(T),
-#     L_test_max::Int = convert(Int, 10),
-#     r_order = convert(T, 0.3),
-#     h_max = convert(T, 1),
-#     step_reduction_factor = convert(T, 2),
-#     max_pieces::Int = typemax(Int),
-#     N_analysis_terms::Int = convert(Int, 2),
-#     ) where T
-
-#     return IVPConfig(
-#         convert(T, ϵ),
-#         convert(T, h_initial),
-#         convert(Int, L_test_max),
-#         convert(T, r_order),
-#         convert(T, h_max),
-#         convert(T, step_reduction_factor),
-#         convert(Int, max_pieces),
-#         convert(Int, N_analysis_terms),
-#     )
-# end
-
-struct GeodesicPiece{T}
-    
-    # [variable index][order index]
-    x::Vector{Vector{T}} # coefficients for the solution state.
-    u::Vector{Vector{T}} # coefficients for first-derivative of state.
-    vs::Vector{Vector{Vector{T}}} # i-th entry contain the coefficients for the i-th parallel vector field.
-end
-
-function GeodesicPiece(
-    x::Vector{Vector{T}},
-    u::Vector{Vector{T}},
-    parallel_transport::Vector,
-    )::GeodesicPiece{T} where T
-    
-    vs::Vector{Vector{Vector{T}}} = collect( parallel_transport[m].v.c for m in eachindex(parallel_transport) )
-
-    return GeodesicPiece(x, u, vs)
-end
-
-function GeodesicPiece(
-    x::Vector{Vector{T}},
-    u::Vector{Vector{T}},
-    )::GeodesicPiece{T} where T
-    
-    return GeodesicPiece(x, u, Vector{Vector{Vector{T}}}(undef, 0))
-end
-
-function getNvars(c::GeodesicPiece)::Int
-    return length(c.x)
-end
-
-function getorder(C::GeodesicPiece)::Int
-    return length(C.x[begin])-1
-end
-
-struct PiecewiseTaylorPolynomial{T}
-
-    # [piece index]
-    coefficients::Vector{GeodesicPiece{T}}
-
-    # [piece index]
-    expansion_points::Vector{T}
-    steps::Vector{T} # diagnostic information. Use this to determine if t_fin was actually reached by our solver algorithm for a given ODE solution.
-
-    # the interval for the simulation. Do expansion_points + steps for the actual simulated time.
-    #t_start::T
-    #t_fin::T
-    # 3-element 1-D array:
-    #time_endpoints::Vector{T} # first entry is start time, last is finish time.
-    # the second interval is the simulated last time.
-
-    # the initial conditions.
-    starting_position::Vector{T}
-    starting_velocity::Vector{T}
-    starting_vectors::Vector{Vector{T}} # transport vectors.
-end
-
-function getNtransports(A::PiecewiseTaylorPolynomial)
-    return length(A.coefficients[begin].vs)
-end
-
-function getendtime(sol::PiecewiseTaylorPolynomial{T})::T where T
-    return sol.expansion_points[end] + sol.steps[end]
-end
-
-function getstarttime(sol::PiecewiseTaylorPolynomial{T})::T where T
-    return sol.expansion_points[begin]
-end
-
-function getNvars(A::PiecewiseTaylorPolynomial)::Int
-    return length(A.coefficients[begin].x)
-end
-
-function getNpieces(A::PiecewiseTaylorPolynomial)::Int
-    return length(A.coefficients)
-end
-
-function resetsolution!(
-    A::PiecewiseTaylorPolynomial{T},
-    x0::Vector{T},
-    u0::Vector{T},
-    v0_set::Vector{Vector{T}},
-    ) where T
-
-    resize!(A.coefficients, 0)
-    resize!(A.expansion_points, 0)
-    resize!(A.steps, 0)
-
-    A.starting_position[:] = x0
-    A.starting_velocity[:] = u0
-
-    resize!(A.starting_vectors, length(v0_set))
-    for m in eachindex(v0_set)
-        A.starting_vectors[m] = v0_set[m]
-    end
-
-    return nothing
-end
-
-# straight line as a PiecewiseTaylorPolynomial{T,GeodesicPiece{T}}
-function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin::T) where T <: AbstractFloat
-    
-    D = length(position)
-    @assert length(velocity) == D
-
-    # single piece.
-
-    # assemble coefficients
-    x = collect( [position[d]; velocity[d]] for d = 1:D ) # starting position, velocity.
-    u = collect( [velocity[d]; zero(T)] for d = 1:D ) # velocity, acceleration.
-
-    coefficients = Vector{GeodesicPiece{T}}(undef, 0)
-    push!(coefficients, GeodesicPiece(x,u))
-
-    # time.
-    expansion_points = [t_start;]
-    steps::Vector{T} = [ (t_fin-t_start)*1.1 ;] # 1.1 instead of 1.0 so that the end point t_fin is included in the interval of validity for the solution piece.
-
-    return PiecewiseTaylorPolynomial(
-        coefficients,
-        expansion_points,
-        steps,
-        position,
-        velocity,
-        Vector{Vector{T}}(undef, 0),
-    )
-end
-
-struct GeodesicEvaluation{T}
-    position::Vector{T}
-    velocity::Vector{T}
-    vector_fields::Vector{Vector{T}}
-end
-
-function GeodesicEvaluation(::Type{T}, N_vars::Integer, N_transports::Integer)::GeodesicEvaluation{T} where T
-    return GeodesicEvaluation(
-        ones(T, N_vars) .* NaN,
-        ones(T, N_vars) .* NaN,
-        collect( ones(T, N_vars) .* NaN for _ = 1:N_transports ),
-    )
-end
-
-# no checking against interval of validity here. That responsibility is on the calling routine.
-function evalsolution!(
-    out::GeodesicEvaluation{T},
-    ::DisableParallelTransport,
-    c::GeodesicPiece{T},
-    t,
-    a,
-    ) where T
-
-    # @show length(c.x)
-    # @show length(out.position)
-    @assert length(c.x) == length(c.u) == length(out.position) == length(out.velocity)
-
-    for d in eachindex(c.x)
-        out.position[d] = evaltaylor(c.x[d], t, a)
-        out.velocity[d] = evaltaylor(c.u[d], t, a)
-    end
-
-    return nothing
-end
-
-# no checking against interval of validity here. That responsibility is on the calling routine.
-function evalsolution!(
-    out::GeodesicEvaluation{T},
-    ::EnableParallelTransport,
-    c::GeodesicPiece{T},
-    t,
-    a,
-    ) where T
-
-    evalsolution!(out, DisableParallelTransport(), c, t, a)
-
-    for m in eachindex(c.vs)
-        for d in eachindex(c.vs[m])
-            out.vector_fields[m][d] = evaltaylor(c.vs[m][d], t, a)
-        end
-    end
-
-    return nothing
-end
-
-# handles the selection of a solution piece from the piece-wise solution.
-function evalsolution!(
-    out::GeodesicEvaluation{T},
-    pt_trait::PT,
-    A::PiecewiseTaylorPolynomial,
-    t::T,
-    ) where {PT<:ParallelTransportTrait, T}
-
-    expansion_points = A.expansion_points
-    t_start = getstarttime(A)
-    t_fin = getendtime(A)
-
-    if !(t_start <= t <= t_fin)
-
-        return false
-    end
-
-    for k in Iterators.drop(eachindex(expansion_points), 1)
-    
-        if t < expansion_points[k]
-            
-            evalsolution!(out, pt_trait, A.coefficients[k-1], t, expansion_points[k-1])
-            return true
-        end
-    end
-
-    if t < expansion_points[end] + A.steps[end]
-
-        evalsolution!(out, pt_trait, A.coefficients[end], t, expansion_points[end])
-        return true
-    end
-
-    # case: our solver algorithm did not reach t_fin, and t is beyond the last solution piece's estimated interval of validity.
-    return false
-end
-
-
-function evalsolution(
-    pt_trait::PT,
-    A::PiecewiseTaylorPolynomial{T},
-    t,
-    )::Tuple{GeodesicEvaluation{T}, Bool} where {PT,T}
-
-    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
-    status_flag = evalsolution!(out, pt_trait, A, t)
-
-    return out, status_flag
-end
-
-function batchevalsolution!(
-    status_flags::BitVector,
-    positions_buffer::Vector{Vector{T}},
-    velocities_buffer::Vector{Vector{T}},
-    A::PiecewiseTaylorPolynomial{T},
-    ts,
-    ) where T
-
-    @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
-
-    for n in eachindex(ts)
-        status_flags[n] = evalsolution!(out, DisableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.
-        
-        positions_buffer[n][:] = out.position
-        velocities_buffer[n][:] = out.velocity
-    end
-
-    return nothing
-end
-
-function batchevalsolution!(
-    status_flags::BitVector,
-    positions_buffer::Vector{Vector{T}}, # [eval_index][dimension].
-    velocities_buffer::Vector{Vector{T}}, # [eval_index][dimension].
-    vector_fields_buffer::Vector{Vector{Vector{T}}}, # [eval index][vector field index][dimension]
-    A::PiecewiseTaylorPolynomial{T},
-    ts,
-    ) where T
-
-    @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
-
-    for n in eachindex(ts)
-        status_flags[n] = evalsolution!(out, EnableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.
-        
-        positions_buffer[n][:] = out.position
-        velocities_buffer[n][:] = out.velocity
-        
-        for m in eachindex(out.vector_fields)
-            vector_fields_buffer[n][m][:] = out.vector_fields[m]
-        end
-    end
-
-    return nothing
-end
-
-###################
-
-function tautology(args...)::Bool
-    return true
-end
-
-function contradiction(args...)::Bool
-    return false
-end
-
 function solveIVP(
     prob_params::GeodesicIVPProblem{MT,T},
-    pt_trait::PT,
+    pt_trait::ParallelTransportTrait,
     t_start::T,
     t_fin::T,
     config::IVPConfig;
     constraints_info::ConstraintType = NoConstraints(),
-    )::PiecewiseTaylorPolynomial{T} where {T, MT<:MetricParams, PT<:ParallelTransportTrait}
+    )::Tuple{PiecewiseTaylorPolynomial{T},Symbol} where {T, MT<:MetricParams}
 
     sol = PiecewiseTaylorPolynomial(
         Vector{GeodesicPiece{T}}(undef,0),
@@ -341,15 +17,15 @@ function solveIVP(
         prob_params.v0_set,
     )
 
-    next_conditions = GeodesicEvaluation(
+    eval_buffer = GeodesicEvaluation(
         T,
         getNvars(prob_params),
         getNtransports(prob_params),
     )
 
-    solveIVP!(
+    exit_flag = solveIVP!(
         sol,
-        next_conditions,
+        eval_buffer,
         prob_params,
         pt_trait,
         t_start,
@@ -358,7 +34,7 @@ function solveIVP(
         constraints_info = constraints_info,
     )
 
-    return sol
+    return sol, exit_flag
 end
 
 # generate a piece-wise polynomials (seperately for each variable) that approximately solve an IVP of the form:
@@ -367,14 +43,14 @@ end
 # Subsequent h_initials are based on the solved step size for the previous polynomial segment.
 function solveIVP!(
     sol::PiecewiseTaylorPolynomial{T},
-    next_conditions::GeodesicEvaluation{T},
+    eval_buffer::GeodesicEvaluation{T},
     prob_params::GeodesicIVPProblem{MT,T},
     pt_trait::PT,
     t_start::T,
     t_fin::T,
     config::IVPConfig;
     constraints_info::ConstraintType = NoConstraints(),
-    ) where {T, MT<:MetricParams, PT<:ParallelTransportTrait}
+    )::Symbol where {T, MT<:MetricParams, PT<:ParallelTransportTrait}
 
     # #set up.
     t_expansion = t_start
@@ -389,15 +65,23 @@ function solveIVP!(
         prob_params.v0_set,
     )
 
+    # for adaptive step. Does not use parallel transport.
+    test_IVP_buffer = getivpbuffer(
+        metric_params,
+        copy(prob_params.x0),
+        copy(prob_params.u0),
+        Vector{Vector{T}}(undef, 0), # no parallel transport.
+    )
+
     resetsolution!(sol, prob_params.x0, prob_params.u0, prob_params.v0_set)
 
     # # solve for the first solution piece.
     t_next, instruction = solvesegmentIVP!(
         sol,
-        next_conditions,
+        test_IVP_buffer,
+        eval_buffer,
         prob,
         pt_trait,
-        #h_initial,
         t_expansion,
         config,
         constraints_info,
@@ -405,8 +89,8 @@ function solveIVP!(
     #h_initial = sol.steps[end] * 10 # heurestic, so that we have similar step sizes?
 
     # check stopping condition
-    if t_next > t_fin || instruction == :stop_simulation
-        return sol
+    if t_next > t_fin || instruction != :continue_simulation
+        return mapexitflag(t_next, t_fin, instruction)
     end
 
     # each iteration is a piece.
@@ -415,16 +99,17 @@ function solveIVP!(
         # set up new IVP problem for the current expansion time.
         prob_current = getivpbuffer(
             metric_params,
-            next_conditions.position,
-            next_conditions.velocity,
-            next_conditions.vector_fields,
+            eval_buffer.position,
+            eval_buffer.velocity,
+            eval_buffer.vector_fields,
         )
         t_expansion = t_next
 
         # solve for the current solution piece.
         t_next, instruction = solvesegmentIVP!(
             sol,
-            next_conditions,
+            test_IVP_buffer,
+            eval_buffer,
             prob_current,
             pt_trait,
             t_expansion,
@@ -433,20 +118,29 @@ function solveIVP!(
         )
     
         # check stopping condition.
-        if t_next > t_fin || instruction == :stop_simulation
-            return sol
+        if t_next > t_fin || instruction != :continue_simulation
+            
+            return mapexitflag(t_next, t_fin, instruction)
         end
     
     end
 
-    return sol
+    return :max_piece_reached
 end
 
+function mapexitflag(t::Real, t_fin::Real, instruction::Symbol)::Symbol
+    
+    if t < t_fin
+        return instruction
+    end
 
-# mutates sol and next_conditions.
+    return :success
+end
+
+# mutates sol and eval_buffer.
 function storesolutionpiece!(
     sol::PiecewiseTaylorPolynomial,
-    next_conditions::GeodesicEvaluation{T},
+    eval_buffer::GeodesicEvaluation{T},
     pt_trait::PT,
     prob::GeodesicIVPBuffer,
     t_expansion::T,
@@ -461,15 +155,16 @@ function storesolutionpiece!(
 
     # get the initial conditions for the next IVP that the next solution piece solves.
     t_next = t_expansion + h
-    evalsolution!(next_conditions, pt_trait, new_coefficients, t_next, t_expansion)
+    evalsolution!(eval_buffer, pt_trait, new_coefficients, t_next, t_expansion)
     
     return nothing
 end
 
-# exits with next_conditions holding the solution evaluated at t_next = t_expansion + h.
+# exits with eval_buffer holding the solution evaluated at t_next = t_expansion + h.
 function solvesegmentIVP!(
     sol::PiecewiseTaylorPolynomial{T},
-    next_conditions::GeodesicEvaluation{T},
+    test_IVP_buffer::GeodesicIVPBuffer,
+    eval_buffer::GeodesicEvaluation{T},
     prob::GeodesicIVPBuffer,
     pt_trait::ParallelTransportTrait,
     t_expansion::T,
@@ -490,12 +185,215 @@ function solvesegmentIVP!(
     # )
     
     getfirstorder!(prob, pt_trait) # this brings the solution to order 1.
-    h, instruction = computetaylorsolution!(prob, pt_trait, config, C)
+    h, instruction = computetaylorsolution!(
+        prob, 
+        test_IVP_buffer,
+        eval_buffer,
+        pt_trait,
+        t_expansion,
+        config,
+        C,
+    )
 
     # # update solution, and prepare for the next IVP.
     t_next = t_expansion + h
-    storesolutionpiece!(sol, next_conditions, pt_trait, prob, t_expansion, h)
+    storesolutionpiece!(sol, eval_buffer, pt_trait, prob, t_expansion, h)
     
     return t_next, instruction
+end
+
+
+###### adaptive step
+
+
+# no constraints.
+function computetaylorsolution!(
+    prob::GeodesicIVPBuffer,
+    test_IVP_buffer::GeodesicIVPBuffer,
+    eval_buffer::GeodesicEvaluation{T},
+    pt_trait::PT,
+    t0::T,
+    config::FixedOrderConfig{T},
+    ::NoConstraints,
+    ) where {T, PT}
+
+    ### get to a high enough order so that we can start computing the error.
+    #@show length(prob.x.c[1]), length(prob.u.c[1])
+    # from the calling function, firstorder!() got prob.x and prob.u up to order 1 already. Start at order 2.
+    for _ = 2:config.L
+        increaseorder!(prob, pt_trait)
+    end
+    
+    # h = choosestepsize(
+    #     #VelocityContinuityStep(),
+    #     GuentherWolfStep(),
+    #     config.step_config.ϵ,
+    #     prob;
+    #     #GuentherWolfStep();
+    #     h_max = config.step_config.h_max,
+    #     step_reduction_factor = config.step_config.reduction_factor,
+    # )
+    h = choosestepsize!(
+        test_IVP_buffer,
+        eval_buffer,
+        config.step_config.strategy,
+        prob,
+        t0,
+        config.step_config,
+    )
+
+    return packagereturnstep(h, config.min_step)
+end
+
+function computetaylorsolution!(
+    prob::GeodesicIVPBuffer,
+    test_IVP_buffer::GeodesicIVPBuffer,
+    eval_buffer::GeodesicEvaluation{T},
+    pt_trait::PT,
+    t0::T,
+    config::AdaptOrderConfig{T},
+    C::ConstraintType,
+    ) where {T, PT}
+
+    ### set up
+
+    #ϵ = config.ϵ
+    L_min = config.L_min
+    L_max = config.L_max
+    order_increase_factor = config.order_increase_factor
+    min_step = config.min_step
+    #r_order = config.r_order
+    #h_max = config.h_max
+    #N_analysis_terms = config.N_analysis_terms
+    #step_reduction_factor = config.reduction_factor
+    p = prob
+
+    #explicit_roots_buffer = constraints_container.explicit_roots_buffer
+    #constraints = constraints_container.constraints
+
+    ### get to a high enough order so that we can start computing the error.
+    # from the calling function, firstorder!() got prob.x and prob.u up to order 1 already.
+    # start from 2, but make sure we have at least an extra order number to do order-adaption's error analysis. Look into this later.
+    L_start = getorder(prob) + 1
+    for _ = L_start:L_min
+        increaseorder!(prob, pt_trait)
+    end
+
+    # start to decide if we should exit.
+    # h = choosestepsize(
+    #     VelocityContinuityStep(),
+    #     ϵ,
+    #     p;
+    #     #GuentherWolfStep();
+    #     h_max = h_max,
+    #     step_reduction_factor = step_reduction_factor,
+    # )
+    h = choosestepsize!(
+        test_IVP_buffer,
+        eval_buffer,
+        config.step_config.strategy,
+        prob,
+        t0,
+        config.step_config,
+    )
+
+    h, constraint_ind = refinestep!(
+        C,
+        h,
+        p.x.c,
+    )
+
+    if constraint_ind > 0
+        # found intersection.
+        return h, :intersection_found
+    end
+    
+
+    ### start adaption strategy.
+    h_prev = zero(T)
+
+    #r = r_order + 1 # initialize to a value so we satisfy the loop condition the first time.
+    while getorder(prob) < L_max && h_prev*order_increase_factor < h #&& r > r_order
+
+        h_prev = h
+
+        # increase order.
+        increaseorder!(prob, pt_trait)
+
+        h = choosestepsize!(
+            test_IVP_buffer,
+            eval_buffer,
+            config.step_config.strategy,
+            prob,
+            t0,
+            config.step_config,
+        )
+
+        h, constraint_ind = refinestepnumerical!(
+            C, h, h_prev, p.x.c, 
+        )
+
+        # take a stab at real root isolation again.
+        # https://people.mpi-inf.mpg.de/~mehlhorn/ftp/EuroCG.pdf
+        # https://doc.sagemath.org/html/en/reference/polynomial_rings/sage/rings/polynomial/real_roots.html
+        # Computing real roots of real polynomials 2016 - ANewDsc
+        # I am here. check over refinestepnumerical!() and refinestep!()
+        #valid_h = (0 < h < h)
+        valid_h = isfinite(h)
+
+        # we avoid returning inside the if-else if we have no roots in [0, h] at the current order.
+        if valid_h
+            # if constraint_ind == 0
+            #     # no roots on [0, h)
+
+            #     return h, :continue_simulation
+            # else
+            #     # found intersection.
+
+            #     return h, :stop_simulation
+            # end
+
+            if constraint_ind == 1
+                # found intersection.
+                return h, :intersection_found
+            end
+        
+        else 
+            # the inconclusive case and unexpected error case, like root solve failed.
+            # no intersection so far, up to and including the previous order.
+
+            if getorder(prob) > L_min
+
+                decreaseorder!(prob, pt_trait, L_min)
+            end
+            # don't need to decrease if we're already at order: L_min.
+
+            return packagereturnstep(h_prev, min_step)
+        end
+
+        # estimate the decrease in error by our increase in order.
+        # see current_notes under `root find` folder.
+        # r = computeerrorratio(
+        #     p,
+        #     ϵ,
+        #     N_analysis_terms;
+        #     h_max = h_max,
+        #     step_reduction_factor = step_reduction_factor,
+        # )
+
+        # if r < r_order
+        #     return h
+        # end
+    end
+
+    return packagereturnstep(h, min_step)
+end
+
+function packagereturnstep(h::T, min_step::T)::Tuple{T,Symbol} where T
+    if h > min_step
+        return h, :continue_simulation
+    end
+
+    return h, :step_too_small
 end
 

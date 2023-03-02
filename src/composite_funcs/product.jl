@@ -1,10 +1,10 @@
 
-struct MultiplyConstant{T}
+struct MultiplyConstant{T} <: SingleVariableTrait
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function MultiplyConstant(::Type{T}, N::Integer) where T
-    return MultiplyConstant(initializecoefficients(T,N))
+    return MultiplyConstant(allocatecoefficients(T,N))
 end
 
 function initializeorder!(
@@ -54,12 +54,12 @@ end
 
 #################
 
-struct Product{T}
+struct Product{T} <: SingleVariableTrait
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function Product(::Type{T}, N::Integer)::Product{T} where T
-    return Product(initializecoefficients(T, N))
+    return Product(allocatecoefficients(T, N))
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.
@@ -94,12 +94,12 @@ end
 
 ################
 
-struct Squared{T}
+struct Squared{T} <: SingleVariableTrait
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function Squared(::Type{T}, N::Integer)::Squared{T} where T
-    return Squared(initializecoefficients(T, N))
+    return Squared(allocatecoefficients(T, N))
 end
 
 # adding a constant only affects order zero, which wouldn't show up with increaseorder!(), but rather initializeorder0.

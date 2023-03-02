@@ -19,6 +19,18 @@ function InterVariableDifference(::Type{T}, N::Integer) where T
     )
 end
 
+function resetbuffer!(A::InterVariableDifference)
+    for i in eachindex(A.Δ_sq)
+        resize!(A.Δ_sq[i], 0)
+    end
+
+    for i in eachindex(A.Δ)
+        resize!(A.Δ[i], 0)
+    end
+
+    return nothing
+end
+
 function initializeorder!(
     A::InterVariableDifference{T},
     c::Vector{Vector{T}},
@@ -62,12 +74,13 @@ end
 
 ###################
 
-struct ΔSumCol{T} # W4. Skips Δ[i,i] in the sum.
+
+struct ΔSumCol{T} <: SingleVariableTrait # W4. Skips Δ[i,i] in the sum.
     c::Vector{Vector{T}} # [variable index][order index].
 end
 
 function ΔSumCol(::Type{T}, N::Integer)::ΔSumCol{T} where T
-    return ΔSumCol(initializecoefficients(T,N))
+    return ΔSumCol(allocatecoefficients(T,N))
 end
 
 function initializeorder!(A::ΔSumCol{T}, S::Matrix{Vector{T}}) where T
@@ -115,8 +128,19 @@ end
 function ΔSumColProduct(::Type{T}, N::Integer)::ΔSumColProduct{T} where T
     return ΔSumColProduct(
     collect( zeros(T, 0) for _ = 1:N, _ = 1:N),
-    initializecoefficients(T,N),
+    allocatecoefficients(T,N),
     )
+end
+
+function resetbuffer!(A::ΔSumColProduct{T}) where T
+    
+    for i in eachindex(A.buf_product_mat)
+        resize!(A.buf_product_mat[i], 0)
+    end
+
+    resetcoefficients!(A.c)
+
+    return nothing
 end
 
 function initializeorder!(
