@@ -179,98 +179,164 @@ function refinestepnumerical!(
     return h, 0
 end
 
+# returns h, and an integer that signify the hyperplane index if intersected. Return 0 for the integer if no intersection (no roots).
 function refinestepnumerical!(
     C::AffineConstraintsContainer{T},
     h::T,
-    h_prev::T; # previously known good step size with no intersections.    
+    h_prev::T, # previously known good step size with no intersections.    
     x::Vector{Vector{T}},
     )::Tuple{T,Int} where T <: AbstractFloat
     
     @assert h > 0
-    @assert h_prev > 0
+    #@assert h_prev > 0
+
+    A = C.upperbound_buffer
+    solver_config = C.solver_config
 
     # get upperbounds.
     upperboundNroots!(
-        C.upperbound_buffer,
+        A,
         x,
         h,
         C.constraints,
         C.bino_mat,
     )
-    
-    # we haven't returned yet, so we subdivide.
-    # upperboundNroots!() updated A.cs to have the right content, and A.ubs to have the right length.
-    A = C.upperbound_buffer
-    cs = A.cs
-    cs_right = A.cs_right
-    max_divisions = A.max_divisions
-    
     ubs = A.ubs
-    bino_mat = A.bino_mat
+    max_ub, max_ind = findmax(ubs)
 
-    x_right = h # x_right = h/2 *2 since the if-else is before updateshiftedpolynomial!().
-    
-    max_ind = -1 # allocate for scope reasons. initialize to non-sense value.
+    x_right = h
 
-    for _ = 1:max_divisions
-        
-        # process upper bounds.
+    if max_ub == 0
+        # guaranteed no roots.
+        return x_right, 0
 
-        max_ub, max_ind = findmax(ubs)
-        # we could have multiple maximums, but the max_ind is not important, so longa s it is not 0 when we have a single root.
-        # we'll force a constraintd etection anyways in the usage of PowerSeriesIVP under the RCG optimization setting.
-        
-        if max_ub == 0
-            # guaranteed no roots.
-            return x_right, 0
+    elseif max_ub == 1
 
-        elseif max_ub == 1
-
-            # could have multiple constraints intersecting on [0, x_right].
-            min_t = convert(T, Inf)
-            valid_step = true
-            constraint_ind = -1
-            for m in eachindex(ubs)
-                if ubs[m] == 1
-                    t, success_flag = runITP(A, zero(T), x_right)
-                    
-                    valid_step = valid_step & success_flag
-                    if min_t > t
-                        min_t = t
-                        constraint_ind = m
-                    end
+        # could have multiple constraints intersecting on [0, x_right].
+        min_t = convert(T, Inf)
+        valid_step = true
+        constraint_ind = -1
+        for m in eachindex(ubs)
+            if ubs[m] == 1
+                t, success_flag = runITP(
+                    A.cs,
+                    zero(T),
+                    x_right,
+                    solver_config,
+                )
+                
+                valid_step = valid_step & success_flag
+                if min_t > t
+                    min_t = t
+                    constraint_ind = m
                 end
             end
-            h_new = min_t
-
-            if valid_step
-                return h_new, constraint_ind
-            end
-        
-        else
-            # in conclusive upperbound of roots.
-
-            if iter == max_divisions || x_right < h_prev
-                # give up refining after current refined step is smaller than 1/2^max_divisions times h.
-
-                # tell the calling function to decreaseo order to revert to the previously known accepted step size and solutio order.
-                return convert(T, NaN), max_ind
-            else
-                # condintue the subdivision. Use bisection rule.
-                x_right = x_right/2
-            end
         end
-        
-        # get shifted polynomial.
-        updateshiftedpolynomial!(cs_right, cs, x_right, zero(T), bino_mat)
+        h_new = min_t
 
-        # get upper bounds for each constraint.
-        for m in eachindex(cs_left)
-            ubs[m] = upperboundroots(cs_left[m], cs_right[m]) 
+        if valid_step
+            return h_new, constraint_ind
         end
-        
+    
     end
 
-    # tell the calling function to decreaseo order to revert to the previously known accepted step size and solutio order.
     return convert(T, NaN), max_ind
 end
+
+
+# # treplace this with the ANewDsc algorithm.
+# function refinestepnumerical!(
+#     C::AffineConstraintsContainer{T},
+#     h::T,
+#     h_prev::T, # previously known good step size with no intersections.    
+#     x::Vector{Vector{T}},
+#     )::Tuple{T,Int} where T <: AbstractFloat
+    
+#     @assert h > 0
+#     @assert h_prev > 0
+
+#     # get upperbounds.
+#     upperboundNroots!(
+#         C.upperbound_buffer,
+#         x,
+#         h,
+#         C.constraints,
+#         C.bino_mat,
+#     )
+    
+#     # we haven't returned yet, so we subdivide.
+#     # upperboundNroots!() updated A.cs to have the right content, and A.ubs to have the right length.
+#     A = C.upperbound_buffer
+#     cs = A.cs
+#     cs_right = A.cs_right
+#     max_divisions = A.max_divisions
+    
+#     ubs = A.ubs
+#     bino_mat = A.bino_mat
+
+#     x_right = h # x_right = h/2 *2 since the if-else is before updateshiftedpolynomial!().
+    
+#     max_ind = -1 # allocate for scope reasons. initialize to non-sense value.
+
+#     for _ = 1:max_divisions
+        
+#         # process upper bounds.
+
+#         max_ub, max_ind = findmax(ubs)
+#         # we could have multiple maximums, but the max_ind is not important, so longa s it is not 0 when we have a single root.
+#         # we'll force a constraintd etection anyways in the usage of PowerSeriesIVP under the RCG optimization setting.
+        
+#         if max_ub == 0
+#             # guaranteed no roots.
+#             return x_right, 0
+
+#         elseif max_ub == 1
+
+#             # could have multiple constraints intersecting on [0, x_right].
+#             min_t = convert(T, Inf)
+#             valid_step = true
+#             constraint_ind = -1
+#             for m in eachindex(ubs)
+#                 if ubs[m] == 1
+#                     t, success_flag = runITP(A, zero(T), x_right)
+                    
+#                     valid_step = valid_step & success_flag
+#                     if min_t > t
+#                         min_t = t
+#                         constraint_ind = m
+#                     end
+#                 end
+#             end
+#             h_new = min_t
+
+#             if valid_step
+#                 return h_new, constraint_ind
+#             end
+        
+#         else
+#             # in conclusive upperbound of roots.
+
+#             if iter == max_divisions || x_right < h_prev
+#                 # give up refining after current refined step is smaller than 1/2^max_divisions times h.
+
+#                 # tell the calling function to decreaseo order to revert to the previously known accepted step size and solutio order.
+#                 return convert(T, NaN), max_ind
+#             else
+#                 # condintue the subdivision. Use bisection rule.
+#                 x_right = x_right/2
+#             end
+#         end
+        
+#         # get shifted polynomial.
+#         updateshiftedpolynomial!(cs_right, cs, x_right, zero(T), bino_mat)
+
+#         # get upper bounds for each constraint.
+#         for m in eachindex(cs_left)
+#             ubs[m] = upperboundroots(cs_left[m], cs_right[m]) 
+#         end
+        
+#     end
+
+#     # tell the calling function to decreaseo order to revert to the previously known accepted step size and solutio order.
+#     return convert(T, NaN), max_ind
+# end

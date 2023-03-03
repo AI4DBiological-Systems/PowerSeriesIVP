@@ -23,8 +23,9 @@ include("./IVPs/methods.jl")
 include("./IVPs/adaptive_strategy.jl")
 include("./IVPs/engine.jl") # move contents and rename this file.
 
+include("./constraints/conversion.jl")
 include("./constraints/Budan_bracket.jl")
-include("./constraints/root_find.jl")
+include("./constraints/quartic_solver.jl")
 include("./constraints/ITP.jl")
 
 include("./testing/continuity.jl")

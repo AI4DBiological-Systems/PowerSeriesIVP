@@ -136,7 +136,7 @@ function runITP(
     # solve roots.
     for m in eachindex(cs)
         t, status_flag = runITP(a, b, PolynomialEvalParams(cs[m], t0), config)
-        @show t, status_flag
+        #@show t, status_flag
 
         # the polynomial is usually very ill-conditioned, so f_tol is unlikely to be reached.
         # check explicitly for root in the calling routine.
@@ -149,11 +149,3 @@ function runITP(
     return min_t, found_root
 end
 
-function runITP(
-    A::BudanIntersectionBuffers{T},
-    t0::T,
-    h::T,
-    ) where T <: AbstractFloat
-
-    return runITP(A.cs, t0, h, A.solver_config)
-end

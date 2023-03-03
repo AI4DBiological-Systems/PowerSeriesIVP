@@ -247,7 +247,8 @@ function ITPConfig(
     return ITPConfig(f_tol, x_tol, k1, k2, n0)
 end
 
-#### constraints front end.
+#### constraints.
+# see conversion.jl for converting the constraint intersection problem to polynomial root problems.
 
 abstract type ConstraintType end
 

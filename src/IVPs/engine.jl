@@ -302,12 +302,14 @@ function computetaylorsolution!(
         h,
         p.x.c,
     )
+    #@show constraint_ind
 
     if constraint_ind > 0
         # found intersection.
         return h, :intersection_found
     end
     
+    #return h, :continue_simulation # debug.
 
     ### start adaption strategy.
     h_prev = zero(T)
@@ -353,7 +355,7 @@ function computetaylorsolution!(
             #     return h, :stop_simulation
             # end
 
-            if constraint_ind == 1
+            if constraint_ind > 0
                 # found intersection.
                 return h, :intersection_found
             end
