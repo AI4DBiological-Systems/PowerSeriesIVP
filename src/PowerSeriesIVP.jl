@@ -4,6 +4,8 @@ using LinearAlgebra
 
 
 include("common_types.jl")
+include("./constraints/types.jl")
+include("./IVPs/types.jl")
 
 include("./sequences/taylor.jl")
 include("./sequences/operators.jl")
@@ -18,7 +20,6 @@ include("./composite_funcs/integral_seq.jl")
 include("./composite_funcs/geodesic_eqns/geodesic_types.jl")
 include("./composite_funcs/geodesic_eqns/RQ22.jl")
 
-include("./IVPs/types.jl")
 include("./IVPs/methods.jl")
 include("./IVPs/adaptive_strategy.jl")
 include("./IVPs/engine.jl") # move contents and rename this file.

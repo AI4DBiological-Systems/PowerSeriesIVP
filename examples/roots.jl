@@ -10,11 +10,22 @@ include("helpers/constraint_helpers.jl")
 
 ###### get x and u.
 
+# pick metric parameters.
+# a = 2.0
+# b = 23.0
+# graph of (2^2 + x^2)/(23^2 + x^2) # notch.
+
 a = 12.24
 b = 3.34
-# graph of (12.24^2 + x^2)/(3.34^2 + x^2)
+# graph of (12.24^2 + x^2)/(3.34^2 + x^2) # unimodal.
 
 N_vars = 3
+
+# bound constraints.
+lbs = -10.5 .* ones(N_vars)
+ubs = 13.3 .* ones(N_vars)
+
+# ## IVP simulation interval and initial conditions.
 t_start = 0.0 # starting time.
 t_fin = 25.0 # finish time.
 
@@ -28,40 +39,78 @@ N_parallel_vector_fields = 1
 v0_set = collect( rand(N_vars) for _ = 1:N_parallel_vector_fields)
 
 ## constraints.
-N_constraints = 2
-#as, bs = generateaffineconstraintscase1(N_constraints)
-as, bs = generateaffineconstraintscase1(Float64)
-constraints = PowerSeriesIVP.AffineConstraints(as, bs)
+
 
 ### configs.
 L_min = 4
 L_max = 21
 
-## constraints configs & buffers.
-complex_zero_tol = 1e-8
-explicit_roots_buffer = PowerSeriesIVP.RootsBuffer(
-    complex_zero_tol,
-    L_min,
-    N_constraints,
+ITP_config = PowerSeriesIVP.ITPConfig(
+    Float64;
+    f_tol = 1e-8,
+    x_tol = 1e-15,
+    k1 = 0.1,
+    k2 = 0.98*(1+MathConstants.golden), # see ITP paper, equation 24.
+    n0 = 0,
 )
 
-upperbound_buffer = PowerSeriesIVP.RootsUpperBoundBuffer(Float64, N_constraints, L_max)
-bino_mat = PowerSeriesIVP.setupbinomialcoefficients(L_max)
+# # constraints configs & buffers.
 
-max_divisions = 0
-ITP_config = PowerSeriesIVP.ITPConfig(Float64)
+# # ### test case: 2 hyperplane constraints.
+# N_constraints = 2
+# #as, bs = generateHyperplaneConstraintscase1(N_constraints)
+# as, bs = generateHyperplaneConstraintscase1(Float64)
+# constraints = PowerSeriesIVP.HyperplaneConstraints(as, bs)
+# constraints_info = PowerSeriesIVP.ConstraintsContainer(
+#     as,
+#     bs;
+#     complex_zero_tol = 1e-8,
+#     L_min = 4,
+#     L_max = 10,
+#     max_divisions = 0,
+#     solver_config = ITP_config,
+# )
 
+# # ### test case: 6 bound constraints (box constrains for all vars)
+# as, bs = PowerSeriesIVP.boxtohyperplanes(lbs, ubs)
+# constraints_info = PowerSeriesIVP.ConstraintsContainer(
+#     lbs,
+#     ubs;
+#     complex_zero_tol = 1e-8,
+#     L_min = 4,
+#     L_max = 10,
+#     max_divisions = 0,
+#     solver_config = ITP_config,
+# )
+# end_time = 12.539794907619783
+
+# ### test case: hyperplane and bound constraints.
+ordering_constraints = [(3,1); (1,2)]
+# ordering_constraints = Vector{Tuple{Int,Int}}(undef, 0) # should get the same result as the above.
+ordering_shifts = zeros(length(ordering_constraints))
 constraints_info = PowerSeriesIVP.ConstraintsContainer(
-    constraints,
-    explicit_roots_buffer,
-    upperbound_buffer,
-    bino_mat,
-    max_divisions,
-    ITP_config,
+    lbs,
+    ubs,
+    ordering_constraints, # if the m-th entry is (i,j), then it means x[i] <= x[j] + b[m]. for the m-th cosntraint.
+    ordering_shifts; # the m-th entry is bs[m].
+    complex_zero_tol = 1e-8,
+    L_min = 4,
+    L_max = 10,
+    max_divisions = 0,
+    solver_config = ITP_config,
 )
+as = constraints_info.constraints.affine.normals
+bs = constraints_info.constraints.affine.offsets
 
-constraints_info = PowerSeriesIVP.NoConstraints()
-t_fin = 9.93219966069891 # if using generateaffineconstraintscase1(). this is the intersection time.
+# # ### No constraints.
+# constraints_info = PowerSeriesIVP.NoConstraints()
+# t_fin = 9.93219966069891 # the intersection time of the 2 hyperplane test case.
+# t_fin = 4.0495153834453275 # the intersection time of the 6 bound, 2 hyperplane test case.
+
+# I am here. post processing routine to detect which constraint was hit.
+# I am here. Line version of IVP. data structure, engine, etc. not using IVP, or special case of RQgeodeisc with fixed order 1.
+#   The latter keeps with the theme of this framework.
+# clean up the I am here's.
 
 ## step selection configs.
 
@@ -148,12 +197,14 @@ end_time = PowerSeriesIVP.getendtime(sol)
 # # ContinuitySecondDerivative, GuentherWolfStep:
 # # 3.231 ms (19791 allocations: 2.23 MiB) # using adaptive config.
 # # 14.415 ms (211695 allocations: 14.98 MiB #  using 4th order.
-# # with 2 affine constraints.
-# 6.237 ms (89927 allocations: 6.38 MiB) # 2 affine constraints, 4th order fixed..
+# # with 2 hyper constraints.
+# 6.237 ms (89927 allocations: 6.38 MiB) # 2 hyper constraints, 4th order fixed..
 # 6.069 ms (89925 allocations: 6.38 MiB) # no constraints.
 # 1.514 ms (9320 allocations: 917.77 KiB) # adaptive order, constraints. 44 pieces.
 # 1.315 ms (8142 allocations: 909.23 KiB) # adaptive order, constraints. 18 pieces.
 
+# 694.140 μs (4097 allocations: 431.34 KiB) # 9 pieces, adaptive, 6 bound & 2 hyper constraints.
+# 573.573 μs (3741 allocations: 408.56 KiB) # 8 pieces. adaptive. no constraints.
 # @assert 1==23
 
 

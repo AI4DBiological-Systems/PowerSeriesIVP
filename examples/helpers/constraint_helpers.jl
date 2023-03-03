@@ -1,5 +1,5 @@
 
-function generateaffineconstraints(
+function generateHyperplaneConstraints(
     N_constraints::Integer,
     )
     as = collect( randn(N_vars) for _ = 1:N_constraints )
@@ -15,7 +15,7 @@ function generateaffineconstraints(
     return as, bs
 end
 
-function generateaffineconstraintscase1(::Type{T}) where T
+function generateHyperplaneConstraintscase1(::Type{T}) where T
 
     as = Vector{Vector{T}}(undef, 2)
     as[1] = [-0.7262044632757468, -0.8138894370909177, -0.6104189261116074]
