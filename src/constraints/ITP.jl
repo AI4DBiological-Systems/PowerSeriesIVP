@@ -117,7 +117,7 @@ function runITP(
 end
 
 # front end for intersection polynomials in `cs`
-# cs is from BudanIntersectionBuffers' cs field.
+# cs is from RootsUpperBoundBuffer' cs field.
 function runITP(
     cs::Vector{Vector{T}}, # [constraints][order]
     t0::T,

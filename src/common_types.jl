@@ -173,25 +173,20 @@ function AdaptOrderConfig(
 end
 
 
-############# constraints step refinement.
+############# root finding, for constraint intersection detection.
 
 struct PositiveRealTrait end
 
 
-struct AffineConstraints{T}
-    normals::Vector{Vector{T}}
-    offsets::Vector{T}
-end
-
-struct IntersectionBuffer{T<:AbstractFloat}
+struct RootsBuffer{T<:AbstractFloat}
     intersection_coefficients::Vector{Vector{T}} # [constraints][order]
     all_roots::Vector{Complex{T}} # [order]
     smallest_positive_roots::Vector{T} # [constraints], real roots.
     zero_tol::T # for deciding wheather a complex number variable is a real number.
 end
 
-function IntersectionBuffer(zero_tol::T, order::Integer, N_constraints::Integer)::IntersectionBuffer{T} where T
-    return IntersectionBuffer(
+function RootsBuffer(zero_tol::T, order::Integer, N_constraints::Integer)::RootsBuffer{T} where T
+    return RootsBuffer(
         collect( zeros(T, order) for _ = 1:N_constraints ),
         Vector{Complex{T}}(undef, order),
         Vector{T}(undef, N_constraints),
@@ -199,7 +194,7 @@ function IntersectionBuffer(zero_tol::T, order::Integer, N_constraints::Integer)
     )
 end
 
-struct BudanIntersectionBuffers{T}
+struct RootsUpperBoundBuffer{T}
     # [constraints][order]
     cs::Vector{Vector{T}}
     cs_right::Vector{Vector{T}}
@@ -210,9 +205,9 @@ struct BudanIntersectionBuffers{T}
     #cs_center::Vector{Vector{T}}
 end
 
-function BudanIntersectionBuffers(::Type{T}, N_constraints::Integer, order::Integer)::BudanIntersectionBuffers{T} where T
+function RootsUpperBoundBuffer(::Type{T}, N_constraints::Integer, order::Integer)::RootsUpperBoundBuffer{T} where T
     
-    return BudanIntersectionBuffers(
+    return RootsUpperBoundBuffer(
         collect( zeros(T, order) for _ = 1:N_constraints ),
         collect( zeros(T, order) for _ = 1:N_constraints ),
         ones(T, N_constraints) .* NaN,
@@ -252,16 +247,62 @@ end
 
 abstract type ConstraintType end
 
-struct NoConstraints <: ConstraintType end
+abstract type SingleTypeConstraints <: ConstraintType end
+
+struct AffineConstraints{T} <: SingleTypeConstraints
+
+    # # affine constraints that aren't bound constraints.
+    normals::Vector{Vector{T}}
+    offsets::Vector{T}
+end
+
+function getNconstraints(C::AffineConstraints)::Int
+    return length(C.offsets)
+end
+
+# although bound constraints can be expressed as affine constraints, 
+# we use a new data type so its intersection problem conversion to
+#   polynomial root problem is efficient.
+struct BoundConstraints{T} <: SingleTypeConstraints
+    # lower bound: each entry is a lower bound constraint, i.e. lb <= x[d].
+    lbs::Vector{T} # contain the value lb.
+    lb_dims::Vector{Int} # contain the dimension d.
+
+    # upper bound: each entry is a lower bound constraint, i.e. x[d] <= ub.
+    ubs::Vector{T}
+    ub_dims::Vector{Int}
+end
+
+function getNconstraints(C::BoundConstraints)::Int
+    return length(C.lbs)
+end
+
+##
+abstract type MultiTypeConstraints <: ConstraintType end
+
+struct AllAffineConstraints{T} <: MultiTypeConstraints
+    affine::AffineConstraints{T} # general affine constraints.
+    bound::BoundConstraints{T} # bound constraints.
+end
+
+function getNconstraints(C::AllAffineConstraints)::Int
+    return getNconstraints(C.affine) + getNconstraints(C.bound)
+end
+
+## container, for interfacing with the engine.
+
+abstract type ConstraintsTrait end
+
+struct NoConstraints <: ConstraintsTrait end # this means there are no constraints for all variables.
 
 
-struct AffineConstraintsContainer{T} <: ConstraintType
+struct ConstraintsContainer{T,CT<:ConstraintType} <: ConstraintsTrait
     #
-    constraints::AffineConstraints{T}
+    constraints::CT
 
     # buffers
-    explicit_roots_buffer::IntersectionBuffer{T}
-    upperbound_buffer::BudanIntersectionBuffers{T}
+    explicit_roots_buffer::RootsBuffer{T}
+    upperbound_buffer::RootsUpperBoundBuffer{T}
     bino_mat::Matrix{Int}
     max_divisions::Int
 

@@ -1,7 +1,7 @@
 
 # # in development. not used for now.
 # function findfirstroot!(
-#     A::BudanIntersectionBuffers{T},
+#     A::RootsUpperBoundBuffer{T},
 #     h::T,
 #     bino_mat::Matrix{Int};
 #     min_bracket_len = 1e-4,
@@ -181,7 +181,7 @@
 
 
 # function allocatebuffer!(
-#     A::BudanIntersectionBuffers{T},
+#     A::RootsUpperBoundBuffer{T},
 #     cs::Vector{Vector{T}},
 #     ) where T
 

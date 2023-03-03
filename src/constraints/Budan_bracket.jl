@@ -76,7 +76,7 @@ end
 
 # mutates A.
 function upperboundintersections!(
-    A::BudanIntersectionBuffers{T},
+    A::RootsUpperBoundBuffer{T},
     sol::PiecewiseTaylorPolynomial{T},
     constraints,
     bino_mat::Matrix{Int},
@@ -106,18 +106,17 @@ end
 
 # based on findfirstroot!()
 function upperboundNroots!(
-    A::BudanIntersectionBuffers{T},
+    A::RootsUpperBoundBuffer{T},
     x::Vector{Vector{T}},
     h::T,
-    constraints::AffineConstraints{T},
+    constraints::ConstraintType,
     bino_mat::Matrix{Int},
     ) where T
 
     updateintersectionpolynomials!(
         A.cs,
         x, 
-        constraints.normals,
-        constraints.offsets,
+        constraints,
     )
 
     cs = A.cs
@@ -181,7 +180,7 @@ end
 
 # returns h, and an integer that signify the hyperplane index if intersected. Return 0 for the integer if no intersection (no roots).
 function refinestepnumerical!(
-    C::AffineConstraintsContainer{T},
+    C::ConstraintsContainer{T},
     h::T,
     h_prev::T, # previously known good step size with no intersections.    
     x::Vector{Vector{T}},
@@ -246,7 +245,7 @@ end
 
 # # treplace this with the ANewDsc algorithm.
 # function refinestepnumerical!(
-#     C::AffineConstraintsContainer{T},
+#     C::ConstraintsContainer{T},
 #     h::T,
 #     h_prev::T, # previously known good step size with no intersections.    
 #     x::Vector{Vector{T}},

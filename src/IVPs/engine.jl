@@ -5,7 +5,7 @@ function solveIVP(
     t_start::T,
     t_fin::T,
     config::IVPConfig;
-    constraints_info::ConstraintType = NoConstraints(),
+    constraints_info::ConstraintsTrait = NoConstraints(),
     )::Tuple{PiecewiseTaylorPolynomial{T},Symbol} where {T, MT<:MetricParams}
 
     sol = PiecewiseTaylorPolynomial(
@@ -49,7 +49,7 @@ function solveIVP!(
     t_start::T,
     t_fin::T,
     config::IVPConfig;
-    constraints_info::ConstraintType = NoConstraints(),
+    constraints_info::ConstraintsTrait = NoConstraints(),
     )::Symbol where {T, MT<:MetricParams, PT<:ParallelTransportTrait}
 
     # #set up.
@@ -169,7 +169,7 @@ function solvesegmentIVP!(
     pt_trait::ParallelTransportTrait,
     t_expansion::T,
     config::IVPConfig,
-    C::ConstraintType,
+    C::ConstraintsTrait,
     )::Tuple{T,Symbol} where T
 
     # # solve for an appropriate step size, increasing the order according to the adaptation strategy in strategy_config.
@@ -252,7 +252,7 @@ function computetaylorsolution!(
     pt_trait::PT,
     t0::T,
     config::AdaptOrderConfig{T},
-    C::ConstraintType,
+    C::ConstraintsTrait,
     ) where {T, PT}
 
     ### set up

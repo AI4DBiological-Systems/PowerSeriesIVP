@@ -170,10 +170,10 @@ end
 
 # second output is 0 if no roots. An index between [0, N_constraints] if a real root was found.
 function refinestep!(
-    A::IntersectionBuffer{T},
+    A::RootsBuffer{T},
     h::T,
     x::Vector{Vector{T}},
-    constraints::AffineConstraints{T},
+    constraints::ConstraintType,
     )::Tuple{T,Int} where T <: AbstractFloat
     
     cs = A.intersection_coefficients
@@ -181,7 +181,7 @@ function refinestep!(
     smallest_positive_roots = A.smallest_positive_roots
     atol = A.zero_tol
 
-    updateintersectionpolynomials!(cs, x, constraints.normals, constraints.offsets)
+    updateintersectionpolynomials!(cs, x, constraints)
 
     for m in eachindex(cs)
         standardizecoefficients!(cs[m]) # put in standard form.
@@ -202,7 +202,7 @@ end
 
 # front end.
 function refinestep!(
-    C::AffineConstraintsContainer{T},
+    C::ConstraintsContainer{T},
     h::T,
     x::Vector{Vector{T}},
     )::Tuple{T,Int} where T <: AbstractFloat
@@ -227,7 +227,7 @@ end
 
 # mutates intersection_buf.
 function searchintersection!(
-    intersection_buf::IntersectionBuffer{T},
+    intersection_buf::RootsBuffer{T},
     sol::PiecewiseTaylorPolynomial{T},
     constraints,
     ) where T

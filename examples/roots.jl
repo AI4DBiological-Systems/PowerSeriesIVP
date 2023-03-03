@@ -39,19 +39,19 @@ L_max = 21
 
 ## constraints configs & buffers.
 complex_zero_tol = 1e-8
-explicit_roots_buffer = PowerSeriesIVP.IntersectionBuffer(
+explicit_roots_buffer = PowerSeriesIVP.RootsBuffer(
     complex_zero_tol,
     L_min,
     N_constraints,
 )
 
-upperbound_buffer = PowerSeriesIVP.BudanIntersectionBuffers(Float64, N_constraints, L_max)
+upperbound_buffer = PowerSeriesIVP.RootsUpperBoundBuffer(Float64, N_constraints, L_max)
 bino_mat = PowerSeriesIVP.setupbinomialcoefficients(L_max)
 
 max_divisions = 0
 ITP_config = PowerSeriesIVP.ITPConfig(Float64)
 
-constraints_info = PowerSeriesIVP.AffineConstraintsContainer(
+constraints_info = PowerSeriesIVP.ConstraintsContainer(
     constraints,
     explicit_roots_buffer,
     upperbound_buffer,
@@ -60,8 +60,8 @@ constraints_info = PowerSeriesIVP.AffineConstraintsContainer(
     ITP_config,
 )
 
-# constraints_info = PowerSeriesIVP.NoConstraints()
-# t_fin = 9.93219966069891 # if using generateaffineconstraintscase1(). this is the intersection time.
+constraints_info = PowerSeriesIVP.NoConstraints()
+t_fin = 9.93219966069891 # if using generateaffineconstraintscase1(). this is the intersection time.
 
 ## step selection configs.
 
@@ -113,7 +113,9 @@ sol, exit_flag = PowerSeriesIVP.solveIVP(
     config;
     constraints_info = constraints_info,
 )
-
+@show length(sol.coefficients)
+orders = PowerSeriesIVP.getpieceorders(sol)
+end_time = PowerSeriesIVP.getendtime(sol)
 
 # (c_x, c_u, next_x, next_u, h) = ([[-0.40243248293794137, -0.9754736537655263, -0.028283214576385357, 0.008649894756430094, 0.005392191906369124], [0.8540414903329187, -0.341379056315598, -0.1582639812836908, -0.032351280660213325, 0.003273286430183644], [-0.6651248667822778, -1.0410555755312705, 0.003524793084258744, 0.014106457829175854, 0.004967531777339607]], [[-0.9754736537655263, -0.056566429152770714, 0.02594968426929028, 0.021568767625476496, 0.0009422561798294823], [-0.341379056315598, -0.3165279625673816, -0.09705384198063997, 0.013093145720734577, 0.011047314839612375], [-1.0410555755312705, 0.007049586168517488, 0.04231937348752756, 0.019870127109358426, -0.0013052033827502707]], [[-0.40707354090780734, -0.9757421559656958, -0.02815903716542786], [0.852413933441089, -0.34288700416659107, -0.15872522860720406], [-0.6700771836505584, -1.0410210801714856, 0.003726784484356198]], [[-0.9757421559656958, -0.05631807433085572, 0.026257624356730923], [-0.34288700416659107, -0.3174504572144081, -0.09686548487608504], [-1.0410210801714856, 0.007453568968712396, 0.042602766460731106]], 0.004757092965693477)
 # xd = tt->PowerSeriesIVP.evaltaylorAD(c_x[1], tt, 0.0)
@@ -142,9 +144,6 @@ sol, exit_flag = PowerSeriesIVP.solveIVP(
 #     config;
 #     constraints_info = constraints_info,
 # );
-# @show length(sol.coefficients)
-# orders = PowerSeriesIVP.getpieceorders(sol)
-# end_time = PowerSeriesIVP.getendtime(sol)
 # @assert 1==2
 # # ContinuitySecondDerivative, GuentherWolfStep:
 # # 3.231 ms (19791 allocations: 2.23 MiB) # using adaptive config.
@@ -152,7 +151,9 @@ sol, exit_flag = PowerSeriesIVP.solveIVP(
 # # with 2 affine constraints.
 # 6.237 ms (89927 allocations: 6.38 MiB) # 2 affine constraints, 4th order fixed..
 # 6.069 ms (89925 allocations: 6.38 MiB) # no constraints.
-# 1.514 ms (9320 allocations: 917.77 KiB) # adaptive order.
+# 1.514 ms (9320 allocations: 917.77 KiB) # adaptive order, constraints. 44 pieces.
+# 1.315 ms (8142 allocations: 909.23 KiB) # adaptive order, constraints. 18 pieces.
+
 # @assert 1==23
 
 
@@ -183,7 +184,7 @@ println("The number of solution pieces: ", length(sol.coefficients))
 
 # set up eval points.
 N_viz = 1000
-t_viz = LinRange(t_start, t_fin, N_viz)
+t_viz = LinRange(t_start, end_time, N_viz)
 
 # evals.
 x_evals = collect( ones(N_vars) for _ = 1:N_viz )
@@ -220,7 +221,7 @@ fig_num += 1
 
 PyPlot.plot(t_viz, x_psm_viz, "purple", label = "sol", linewidth = 3)
 PyPlot.plot(t_viz, line_geodesic.(t_viz), "--", label = "line geodesic")
-PyPlot.plot(t_viz .* 2, y_psm_viz, "--", label = "sol, twice speed", linewidth = 3)
+PyPlot.plot(t_viz .* 2, y_psm_viz, "--", label = "sol, twice speed (time *2)", linewidth = 3)
 
 PyPlot.legend()
 PyPlot.xlabel("time")
@@ -228,6 +229,7 @@ PyPlot.ylabel("trajectory")
 PyPlot.title("numerical solution, dim $d_select")
 
 
+#@assert 1==23
 
 
 

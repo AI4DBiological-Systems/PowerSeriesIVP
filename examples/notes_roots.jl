@@ -68,7 +68,7 @@ smallest_positive_roots = Vector{T}(undef, N_constraints) # real roots.
 
 
 complex_zero_tol = 1e-8
-intersection_buf = PowerSeriesIVP.IntersectionBuffer(
+intersection_buf = PowerSeriesIVP.RootsBuffer(
     complex_zero_tol,
     L,
     N_constraints,
@@ -139,7 +139,7 @@ a2 = as[constraint_inds[pieces[2]]]
 
 
 ### Budan bound.
-root_ub_buf = PowerSeriesIVP.BudanIntersectionBuffers(Float64, N_constraints, L)
+root_ub_buf = PowerSeriesIVP.RootsUpperBoundBuffer(Float64, N_constraints, L)
 bino_mat = PowerSeriesIVP.setupbinomialcoefficients(L_max)
 
 ubs, ubs_inds = PowerSeriesIVP.upperboundintersections!(root_ub_buf, sol, constraints, bino_mat)
