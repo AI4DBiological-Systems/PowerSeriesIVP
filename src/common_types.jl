@@ -8,43 +8,76 @@ function resetbuffer!(A::SingleVariableTrait)
     return nothing
 end
 
-##### for solveIVP!()
+#### trait functions.
+# scattered in various source files.
+# getsoltype()
+# getbuffertype()
 
-abstract type MetricParams end
+##### IVP
 
-struct RQ22Metric{T} <: MetricParams
-    a::T
-    b::T
+# ## data types for the IVP definition.
+
+abstract type IVPParameters end
+
+abstract type IVPBuffer end
+
+abstract type IVPStatement end
+
+abstract type IVPVariationTrait end # to toggle between similar IVPs that share common computation features.
+
+##### variable types, which defines the IVP.
+
+abstract type VariableContainer end
+
+########### the entire solution container of a geodesic IVP.
+
+abstract type SolutionPiece end
+
+struct PiecewiseTaylorPolynomial{T, VT <: SolutionPiece}
+
+    # [piece index]
+    coefficients::Vector{VT}
+
+    # [piece index]
+    expansion_points::Vector{T}
+    steps::Vector{T} # diagnostic information. Use this to determine if t_fin was actually reached by our solver algorithm for a given ODE solution.
+
+    # # the initial conditions.
+    # starting_position::Vector{T}
+    # starting_velocity::Vector{T}
+    # starting_vectors::Vector{Vector{T}} # transport vectors.
+    #initial_conditions::Vector{VT}
 end
 
-struct GeodesicIVPProblem{MT,T}
-    metric_params::MT
-    x0::Vector{T}
-    u0::Vector{T}
-    v0_set::Vector{Vector{T}}
+# use the trait function getsoltype(::IVPStatement) to get the sxact PiecewiseTaylorPolynomial{T,VT} data type. See geodesic_types.jl.
+
+function PiecewiseTaylorPolynomial(::Type{T}, ::Type{VT}) where {T, VT<: SolutionPiece}
+    return PiecewiseTaylorPolynomial(
+        Vector{VT}(undef, 0),
+        Vector{T}(undef, 0),
+        Vector{T}(undef, 0),
+    )
 end
 
-function GeodesicIVPProblem(
-    metric_params::MT,
-    x0::Vector{T},
-    u0::Vector{T},
-    )::GeodesicIVPProblem{MT,T} where {MT,T}
-
-    return GeodesicIVPProblem(metric_params, x0, u0, Vector{Vector{T}}(undef, 0))
+function getendtime(sol::PiecewiseTaylorPolynomial{T,VT})::T where {T,VT}
+    return sol.expansion_points[end] + sol.steps[end]
 end
 
-function getNvars(A::GeodesicIVPProblem)
-    return length(A.x0)
+function getstarttime(sol::PiecewiseTaylorPolynomial{T,VT})::T where {T,VT}
+    return sol.expansion_points[begin]
 end
 
-function getNtransports(A::GeodesicIVPProblem)
-    return length(A.v0_set)
+function getNpieces(A::PiecewiseTaylorPolynomial)::Int
+    return length(A.coefficients)
 end
 
+function getpieceorders(A::PiecewiseTaylorPolynomial)::Vector{Int}
+    return collect( getorder(A.coefficients[i]) for i in eachindex(A.coefficients) )
+end
 
-
-#####
-
+function getdim(A::PiecewiseTaylorPolynomial)::Int
+    return getdim(A.coefficients[begin])
+end
 
 # sutypes of GeodesicIVPBuffer are defined in RQ22.jl
 

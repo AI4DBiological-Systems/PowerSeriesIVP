@@ -56,7 +56,7 @@ x0_oracle = collect( xs[i](t0) for i in eachindex(xs) )
 
 # ## creat sequences for u and x.
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob = PowerSeriesIVP.getivpbuffer(
+prob = PowerSeriesIVP.getIVPbuffer(
     metric_params,
     x0,
     u0,
@@ -169,7 +169,7 @@ T = Float64
 #h_initial = convert(T, NaN)
 h_initial = one(T)
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob = PowerSeriesIVP.getivpbuffer(
+prob = PowerSeriesIVP.getIVPbuffer(
     metric_params,
     x0,
     u0,

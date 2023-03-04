@@ -5,11 +5,13 @@ using LinearAlgebra
 
 include("common_types.jl")
 include("./constraints/types.jl")
-include("./IVPs/types.jl")
+include("./composite_funcs/geodesic_eqns/geodesic_types.jl")
 
+# polynomial evaluation.
 include("./sequences/taylor.jl")
 include("./sequences/operators.jl")
 
+# composition function library. See PSM 2019 paper.
 include("./composite_funcs/composition_utils.jl")
 include("./composite_funcs/affine.jl")
 include("./composite_funcs/product.jl")
@@ -17,20 +19,24 @@ include("./composite_funcs/quotient.jl")
 include("./composite_funcs/multivariate.jl")
 include("./composite_funcs/integral_seq.jl")
 
-include("./composite_funcs/geodesic_eqns/geodesic_types.jl")
+# composition functions for the specific Riemannian Levi-Civita metrics for the geodesic equations family of IVPs.
 include("./composite_funcs/geodesic_eqns/RQ22.jl")
+# other metrics go here.
+include("./composite_funcs/geodesic_eqns/post_methods.jl")
 
+# engine for solving IVPs via PSM.
 include("./IVPs/methods.jl")
 include("./IVPs/adaptive_strategy.jl")
 include("./IVPs/engine.jl") # move contents and rename this file.
 
+# constraint intersection detection.
 include("./constraints/conversion.jl")
 include("./constraints/Budan_bracket.jl")
 include("./constraints/quartic_solver.jl")
 include("./constraints/ITP.jl")
 
+# misc.
 include("./testing/continuity.jl")
-
 include("utils.jl")
 
 

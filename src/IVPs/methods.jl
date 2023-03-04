@@ -2,62 +2,39 @@
 ############## methods for the entire solution container.
 
 function resetsolution!(
-    A::PiecewiseTaylorPolynomial{T},
-    x0::Vector{T},
-    u0::Vector{T},
-    v0_set::Vector{Vector{T}},
-    ) where T
+    A::PiecewiseTaylorPolynomial,
+    # x0::Vector{T},
+    # u0::Vector{T},
+    # v0_set::Vector{Vector{T}},
+    )
 
     resize!(A.coefficients, 0)
     resize!(A.expansion_points, 0)
     resize!(A.steps, 0)
 
-    A.starting_position[:] = x0
-    A.starting_velocity[:] = u0
+    # A.starting_position[:] = x0
+    # A.starting_velocity[:] = u0
 
-    resize!(A.starting_vectors, length(v0_set))
-    for m in eachindex(v0_set)
-        A.starting_vectors[m] = v0_set[m]
-    end
+    # resize!(A.starting_vectors, length(v0_set))
+    # for m in eachindex(v0_set)
+    #     A.starting_vectors[m] = v0_set[m]
+    # end
 
     return nothing
 end
 
-function extractcoefficients(sol::PiecewiseTaylorPolynomial{T}) where T
+function extractcoefficients(
+    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
+    )::Tuple{Vector{Vector{T}},Vector{Vector{T}}} where T
 
-    c_x = collect( sol.coefficients[k].x for k in eachindex(sol.coefficients) )
-    c_u = collect( sol.coefficients[k].u for k in eachindex(sol.coefficients) )
+    c_x = collect( A.coefficients[k].x for k in eachindex(A.coefficients) )
+    c_u = collect( A.coefficients[k].u for k in eachindex(A.coefficients) )
 
     return c_x, c_u
 end
 
-# straight line as a PiecewiseTaylorPolynomial{T}
-function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin::T) where T <: AbstractFloat
-    
-    D = length(position)
-    @assert length(velocity) == D
-
-    # single piece.
-
-    # assemble coefficients
-    x = collect( [position[d]; velocity[d]] for d = 1:D ) # starting position, velocity.
-    u = collect( [velocity[d]; zero(T)] for d = 1:D ) # velocity, acceleration.
-
-    coefficients = Vector{GeodesicPiece{T}}(undef, 0)
-    push!(coefficients, GeodesicPiece(x,u))
-
-    # time.
-    expansion_points = [t_start;]
-    steps::Vector{T} = [ (t_fin-t_start)*1.1 ;] # 1.1 instead of 1.0 so that the end point t_fin is included in the interval of validity for the solution piece.
-
-    return PiecewiseTaylorPolynomial(
-        coefficients,
-        expansion_points,
-        steps,
-        position,
-        velocity,
-        Vector{Vector{T}}(undef, 0),
-    )
+function getNtransports(A::PiecewiseTaylorPolynomial{T, GeodesicPiece{T}}) where T
+    return getNtransports(A.coefficients[begin])
 end
 
 ################# methods for evalating solution trajectory.
@@ -160,11 +137,11 @@ end
 
 function evalsolution(
     pt_trait::ParallelTransportTrait,
-    A::PiecewiseTaylorPolynomial{T},
+    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     t,
     )::Tuple{GeodesicEvaluation{T}, Bool} where T
 
-    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
+    out = GeodesicEvaluation(T, getdim(A), getNtransports(A))
     status_flag = evalsolution!(out, pt_trait, A, t)
 
     return out, status_flag
@@ -174,12 +151,12 @@ function batchevalsolution!(
     status_flags::BitVector,
     positions_buffer::Vector{Vector{T}},
     velocities_buffer::Vector{Vector{T}},
-    A::PiecewiseTaylorPolynomial{T},
+    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     ts,
     ) where T
 
     @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
+    out = GeodesicEvaluation(T, getdim(A), getNtransports(A))
 
     for n in eachindex(ts)
         status_flags[n] = evalsolution!(out, DisableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.
@@ -196,12 +173,12 @@ function batchevalsolution!(
     positions_buffer::Vector{Vector{T}}, # [eval_index][dimension].
     velocities_buffer::Vector{Vector{T}}, # [eval_index][dimension].
     vector_fields_buffer::Vector{Vector{Vector{T}}}, # [eval index][vector field index][dimension]
-    A::PiecewiseTaylorPolynomial{T},
+    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     ts,
     ) where T
 
     @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getNvars(A), getNtransports(A))
+    out = GeodesicEvaluation(T, getdim(A), getNtransports(A))
 
     for n in eachindex(ts)
         status_flags[n] = evalsolution!(out, EnableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.

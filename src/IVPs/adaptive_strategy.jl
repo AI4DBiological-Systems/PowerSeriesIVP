@@ -31,56 +31,6 @@ function computeerror(
     return abs(sum( c[begin+n]*h^(n-1) for n = (L+1):order ))
 end
 
-# # based on sum error formula in my notes.
-# function computeerrorratio(
-#     step_trait::StepStrategyTrait,
-#     p::GeodesicIVPBuffer,
-#     ϵ::T,
-#     N_analysis_terms::Integer;
-#     h_max = one(T),
-#     step_reduction_factor = 2,
-#     )::T where T
-    
-#     order = length(p.x.c[begin])
-#     @assert order > N_analysis_terms > 0
-
-#     M = order - N_analysis_terms
-    
-#     a = choosestepsize(
-#         step_trait,
-#         #GuentherWolfStep(),
-#         ϵ,
-#         p;
-#         order = M, # I am here.
-#         h_max = h_max,
-#         step_reduction_factor = step_reduction_factor,
-#     )
-
-#     b = choosestepsize(
-#         step_trait,
-#         #GuentherWolfStep(),
-#         ϵ,
-#         x;
-#         order = M-1, # I am here
-#         h_max = h_max,
-#         step_reduction_factor = step_reduction_factor,
-#     )
-
-#     numerator = zero(T)
-#     denominator = zero(T)
-#     for d in eachindex(x)
-        
-#         x_d = x[d]
-
-#         numerator += abs(sum( x_d[end-n+1]*a^(n-1) for n = 1:N_analysis_terms ))
-#         denominator += abs(sum( x_d[end-1-n]*b^(n-1) for n = 1:N_analysis_terms ))
-#     end
-#     error_ratio = (numerator*a^M)/(denominator*b^(M-1))
-
-#     return error_ratio
-# end
-
-
 
 ############ step size
 
@@ -209,9 +159,10 @@ end
 
 ########## general.
 
+# does not actually mutate any of the inputs.
 function choosestepsize!(
-    ::GeodesicIVPBuffer,
-    ::GeodesicEvaluation{T},
+    ::GeodesicIVPBuffer, # unused.
+    ::GeodesicEvaluation{T}, # unused.
     ::NonProbingStep,
     prob::GeodesicIVPBuffer,
     t0,
@@ -231,6 +182,7 @@ end
 
 ########## continuity error
 
+# mutates test_IVp and eval_buffer.
 # if continuity conditions fail, mutates sol and eval_buffer.
 function choosestepsize!(
     test_IVP::GeodesicIVPBuffer,

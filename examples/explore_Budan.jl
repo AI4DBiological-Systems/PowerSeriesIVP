@@ -43,7 +43,7 @@ config = PowerSeriesIVP.AdaptOrderConfig(
     N_analysis_terms = 2,
 )
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
+prob_params = PowerSeriesIVP.GeodesicIVPStatement(metric_params, x0, u0, v0_set)
 sol = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),

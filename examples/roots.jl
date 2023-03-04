@@ -107,10 +107,7 @@ bs = constraints_info.constraints.affine.offsets
 # t_fin = 9.93219966069891 # the intersection time of the 2 hyperplane test case.
 # t_fin = 4.0495153834453275 # the intersection time of the 6 bound, 2 hyperplane test case.
 
-# I am here. post processing routine to detect which constraint was hit.
-# I am here. Line version of IVP. data structure, engine, etc. not using IVP, or special case of RQgeodeisc with fixed order 1.
-#   The latter keeps with the theme of this framework.
-# clean up the I am here's.
+
 
 ## step selection configs.
 
@@ -151,8 +148,9 @@ config = adaptive_order_config
 #config = fixed_order_config
 
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
+prob_params = PowerSeriesIVP.GeodesicIVPStatement(metric_params, x0, u0, v0_set)
 sol, exit_flag = PowerSeriesIVP.solveIVP(
+    PowerSeriesIVP.getsoltype(prob_params),
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
@@ -186,6 +184,7 @@ end_time = PowerSeriesIVP.getendtime(sol)
 #@assert 1==23
 
 # @btime sol, exit_flag = PowerSeriesIVP.solveIVP(
+#     PowerSeriesIVP.getsoltype(prob_params),
 #     prob_params,
 #     PowerSeriesIVP.EnableParallelTransport(),
 #     t_start,
@@ -212,8 +211,9 @@ end_time = PowerSeriesIVP.getendtime(sol)
 
 
 config2 = adaptive_order_config
-prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, 2 .* u0, v0_set)
+prob_params = PowerSeriesIVP.GeodesicIVPStatement(metric_params, x0, 2 .* u0, v0_set)
 sol2, exit_flag2 = PowerSeriesIVP.solveIVP(
+    PowerSeriesIVP.getsoltype(prob_params),
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
     # PowerSeriesIVP.DisableParallelTransport(), # use this line isntead for faster computation, if don't want to parallel transport the vector fields in v0_set.
@@ -347,15 +347,45 @@ PyPlot.xlabel("x1")
 PyPlot.ylabel("x2")
 PyPlot.title("trajectory x1, x2")
 
+
+
+
+
+
+
 #@assert 1==2
 
-
-### next, box constraints. and mix of box and affine.
-# then interface of how one caneasily specify box and affine.
+# I am here.
+# write line intersection:
+# evalsolution()
+# solveIVP (means, find intersection given t_fin and initial conditions).
 # move onto RCG after that.
 
-# I am here.
-# implement combo Constraint container where
-# box, general affine, and no constraints can be assigned to any combination of variables.
-# implement backtrack Budan,
-# write intersection tests.
+line = PowerSeriesIVP.createline(x0, u0, t_start, t_fin)
+
+# evals.
+x_evals = collect( ones(N_vars) for _ = 1:N_viz )
+u_evals = collect( ones(N_vars) for _ = 1:N_viz )
+status_flags = falses(N_viz) # true for good eval by sol.
+PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, line, t_viz)
+
+## prepare for plot.
+d_select = 1
+y_line_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
+
+
+PyPlot.figure(fig_num)
+fig_num += 1
+
+PyPlot.plot(t_viz, y_tb_viz, label = "toolbox")
+PyPlot.plot(t_viz, y_line_viz, label = "line")
+PyPlot.plot(t_viz, line_geodesic.(t_viz), "--", label = "line geodesic")
+
+PyPlot.legend()
+PyPlot.xlabel("time")
+PyPlot.ylabel("trajectory")
+PyPlot.title("line, dim $d_select")
+
+println("check line against line_geodesic:")
+@show norm(line_geodesic.(t_viz) - y_line_viz) # should be zero if createline() is correctly implemented.
+println()

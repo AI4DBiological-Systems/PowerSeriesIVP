@@ -1,27 +1,16 @@
 
 function solveIVP(
-    prob_params::GeodesicIVPProblem{MT,T},
-    pt_trait::ParallelTransportTrait,
+    ::Type{ST},
+    prob_params::GeodesicIVPStatement,
+    pt_trait::IVPVariationTrait,
     t_start::T,
     t_fin::T,
     config::IVPConfig;
     constraints_info::ConstraintsTrait = NoConstraints(),
-    )::Tuple{PiecewiseTaylorPolynomial{T},Symbol} where {T, MT<:MetricParams}
+    )::Tuple{ST,Symbol} where {T, ST}
 
-    sol = PiecewiseTaylorPolynomial(
-        Vector{GeodesicPiece{T}}(undef,0),
-        Vector{T}(undef,0),
-        Vector{T}(undef,0),
-        prob_params.x0,
-        prob_params.u0,
-        prob_params.v0_set,
-    )
-
-    eval_buffer = GeodesicEvaluation(
-        T,
-        getNvars(prob_params),
-        getNtransports(prob_params),
-    )
+    sol = PiecewiseTaylorPolynomial(T, getsolpiecetype(prob_params))
+    eval_buffer = getvariablecontainer(prob_params)
 
     exit_flag = solveIVP!(
         sol,
@@ -42,38 +31,27 @@ end
 # - h_initial used for adaption of the first polynomial.
 # Subsequent h_initials are based on the solved step size for the previous polynomial segment.
 function solveIVP!(
-    sol::PiecewiseTaylorPolynomial{T},
-    eval_buffer::GeodesicEvaluation{T},
-    prob_params::GeodesicIVPProblem{MT,T},
-    pt_trait::PT,
+    sol::PiecewiseTaylorPolynomial,
+    eval_buffer::VariableContainer,
+    prob_params::IVPStatement,
+    pt_trait::IVPVariationTrait,
     t_start::T,
     t_fin::T,
     config::IVPConfig;
     constraints_info::ConstraintsTrait = NoConstraints(),
-    )::Symbol where {T, MT<:MetricParams, PT<:ParallelTransportTrait}
+    )::Symbol where T
 
     # #set up.
     t_expansion = t_start
 
-    # a = prob_params.a
-    # b = prob_params.b
-    metric_params = prob_params.metric_params
-    prob = getivpbuffer(
-        metric_params,
-        prob_params.x0,
-        prob_params.u0,
-        prob_params.v0_set,
-    )
+    # problem buffer.
+    prob = getIVPbuffer(getbuffertype(prob_params), prob_params)
 
     # for adaptive step. Does not use parallel transport.
-    test_IVP_buffer = getivpbuffer(
-        metric_params,
-        copy(prob_params.x0),
-        copy(prob_params.u0),
-        Vector{Vector{T}}(undef, 0), # no parallel transport.
-    )
+    test_IVP_buffer = copyIVPtestbuffer(getbuffertype(prob_params), prob_params)
 
-    resetsolution!(sol, prob_params.x0, prob_params.u0, prob_params.v0_set)
+    #resetsolution!(sol, prob_params.x0, prob_params.u0, prob_params.v0_set)
+    resetsolution!(sol)
 
     # # solve for the first solution piece.
     t_next, instruction = solvesegmentIVP!(
@@ -97,11 +75,10 @@ function solveIVP!(
     for _ = 2:config.max_pieces 
 
         # set up new IVP problem for the current expansion time.
-        prob_current = getivpbuffer(
-            metric_params,
-            eval_buffer.position,
-            eval_buffer.velocity,
-            eval_buffer.vector_fields,
+        prob_current = getIVPbuffer(
+            getbuffertype(prob_params),
+            prob_params,
+            eval_buffer,
         )
         t_expansion = t_next
 
@@ -139,7 +116,7 @@ end
 
 # mutates sol and eval_buffer.
 function storesolutionpiece!(
-    sol::PiecewiseTaylorPolynomial,
+    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     eval_buffer::GeodesicEvaluation{T},
     pt_trait::PT,
     prob::GeodesicIVPBuffer,
@@ -162,7 +139,7 @@ end
 
 # exits with eval_buffer holding the solution evaluated at t_next = t_expansion + h.
 function solvesegmentIVP!(
-    sol::PiecewiseTaylorPolynomial{T},
+    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     test_IVP_buffer::GeodesicIVPBuffer,
     eval_buffer::GeodesicEvaluation{T},
     prob::GeodesicIVPBuffer,
@@ -335,11 +312,6 @@ function computetaylorsolution!(
             C, h, h_prev, p.x.c, 
         )
 
-        # take a stab at real root isolation again.
-        # https://people.mpi-inf.mpg.de/~mehlhorn/ftp/EuroCG.pdf
-        # https://doc.sagemath.org/html/en/reference/polynomial_rings/sage/rings/polynomial/real_roots.html
-        # Computing real roots of real polynomials 2016 - ANewDsc
-        # I am here. check over refinestepnumerical!() and refinestep!()
         #valid_h = (0 < h < h)
         valid_h = isfinite(h)
 

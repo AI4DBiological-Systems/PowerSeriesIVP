@@ -77,7 +77,7 @@ end
 # mutates A.
 function upperboundintersections!(
     A::RootsUpperBoundBuffer{T},
-    sol::PiecewiseTaylorPolynomial{T},
+    sol::PiecewiseTaylorPolynomial,
     constraints,
     bino_mat::Matrix{Int},
     ) where T

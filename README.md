@@ -53,7 +53,7 @@ config = PowerSeriesIVP.AdaptOrderConfig(
     N_analysis_terms = 2,
 )
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
+prob_params = PowerSeriesIVP.GeodesicIVPStatement(metric_params, x0, u0, v0_set)
 sol = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
@@ -142,7 +142,7 @@ t_select = 3 # index selected for this test, from the eval positions, t_viz.
 t = clamp(t_viz[t_select], t_start, t_fin)
 sol_eval = PowerSeriesIVP.GeodesicEvaluation(
     T,
-    PowerSeriesIVP.getNvars(sol),
+    PowerSeriesIVP.getdim(sol),
     PowerSeriesIVP.getNtransports(sol),
 )
 status_flag = PowerSeriesIVP.evalsolution!(
@@ -193,10 +193,19 @@ println()
 ```
 
 # TODO:
+- post processing routine to detect which constraint was hit. for testing.
+- Line version of IVP. data structure, engine, etc. not using IVP, or special case of RQgeodeisc with fixed order 1. Use new datastructure that is subtype of GeodesicIVP.
+
+# Future:
+- implement backtrack initial step for current order when Budan's upper bound is inconclusive, Future release.
+- impelemnt simultaneous root solve for all constraint polynomials, and eventually hone in on the interval that is closest to zero, using the ANewDsc algorithm.
+
+# Release check list:
 - Make the test-oriented scripts in `\examples` into test sets.
 - Add API documentation strings, and tutorials with visualization.
 - Write latex or render an image to show the metric equation on the README.md and tutorial examples.
 - Separately export the simulate IVP and simulate single piece functionalities.
+- intersection tests, numerical, graphical / tutorial.
 
 # Reference
 1. Guenther, Jenna, and Morgan Wolf. "An adaptive, highly accurate and efficient, parker-sochacki algorithm for numerical solutions to initial value ordinary differential equation systems." Online 12 (2019): 257-281.

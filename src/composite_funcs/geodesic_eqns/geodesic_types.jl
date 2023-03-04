@@ -2,154 +2,133 @@
 
 ##### Geodesic equations could have parallel transport, at a higher computational cost. Use a trait to signify on or off.
 
-abstract type ParallelTransportTrait end
+abstract type ParallelTransportTrait <: IVPVariationTrait end
 
 struct DisableParallelTransport <: ParallelTransportTrait end
 struct EnableParallelTransport <: ParallelTransportTrait end
 
 ####  the super type that is used in specific geodesic equations' composition functions.
 # e.g., used in RQ22.jl.
-abstract type GeodesicIVPBuffer end
+abstract type GeodesicIVPBuffer <: IVPBuffer end
 
 
-#####  main routine for computing the power series method iterations for the generic geodesic IVP problem.
+#### parameters to the geodesic equation IVPs.
 
-function getorder(p::GeodesicIVPBuffer)::Int
-    return length(p.x.c[begin])-1
+abstract type MetricParams <: IVPParameters end
+
+struct RQ22Metric{T} <: MetricParams
+    a::T
+    b::T
 end
 
-function getfirstorder!(
-    p::GeodesicIVPBuffer,
-    ::DisableParallelTransport,
-    )
+# use getbuffertype(::MetricParams) = GeodesicIVPBuffer.
+# i.e. getbuffertype(::RQ22Metric) = RQ22IVPBuffer is defined in RQ22.jl.
 
-    # variables
-    initializeorder!(p.x, p.x0)
-    initializeorder!(p.u, p.u0)
 
-    # du/dt
-    initializeorder!(p.θ, p.x.c, p.u.c)
+#### problem statement: parameters, and initial conditions.
 
-    # variables: first update.
-    increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
-    increaseorder!(p.u, p.θ.c)
+struct GeodesicIVPStatement{MT,T} <: IVPStatement
+    metric_params::MT
+    x0::Vector{T}
+    u0::Vector{T}
+    v0_set::Vector{Vector{T}}
+end
+
+function GeodesicIVPStatement(
+    metric_params::MT,
+    x0::Vector{T},
+    u0::Vector{T},
+    )::GeodesicIVPStatement{MT,T} where {MT,T}
+
+    return GeodesicIVPStatement(metric_params, x0, u0, Vector{Vector{T}}(undef, 0))
+end
+
+function getdim(A::GeodesicIVPStatement)
+    return length(A.x0)
+end
+
+function getNtransports(A::GeodesicIVPStatement)
+    return length(A.v0_set)
+end
+
+getsoltype(::GeodesicIVPStatement{MT,T}) where {MT,T} = PiecewiseTaylorPolynomial{T,GeodesicPiece{T}}
+
+
+
+# this script contain types and basic setter/getter methods.
+# more complex methods for each type are in methods.jl.
+
+###### step size strategies specific for geodesic IVPs. Encode as traits.
+
+struct VelocityContinuityStep <: NonProbingStep end # dx/dt at t = h vs. u_next(0). h is step size. This is equivalent to the abs() of the last Taylor coefficient of u(t), since u(h) = u_next(0) by initial conditions of the next IVP piece. See notes for details.
+
+
+############ solution piece of an interval from the geodesic IVP.
+
+struct GeodesicPiece{T} <: SolutionPiece
     
-    return nothing
+    # [variable index][order index]
+    x::Vector{Vector{T}} # coefficients for the solution state.
+    u::Vector{Vector{T}} # coefficients for first-derivative of state.
+    vs::Vector{Vector{Vector{T}}} # i-th entry contain the coefficients for the i-th parallel vector field.
 end
 
-
-function increaseorder!(
-    p::GeodesicIVPBuffer,
-    ::DisableParallelTransport,
-    )
-
-    # du/dt
-    increaseorder!(p.θ, p.x.c, p.u.c)
-
-    # variables
-    increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
-    increaseorder!(p.u, p.θ.c)
-
-    return nothing
-end
-
-# only decrease x and u. Does not decrease intermediates variables and their buffers, such as  θ.
-function decreaseorder!(
-    p::GeodesicIVPBuffer,
-    ::DisableParallelTransport,
-    min_order::Integer,
-    )
-
-    # if length(p.x.c) < 1
-    #     println("Warning, decreaseorder!() received an polynomial less than order 1. Did not decrease order further.")
-    #     return nothing
-    # end
-
-    # variables
-    decreaseorder!(p.x, 1, min_order)
-    decreaseorder!(p.u, 1, min_order)
-
-    return nothing
-end
-
-function getfirstorder!(
-    p::GeodesicIVPBuffer,
-    ::EnableParallelTransport,
-    )
-
-    pt = p.parallel_transport
-
-    # set up the geodesic variables and related quantities.
-    getfirstorder!(p, DisableParallelTransport())
-
-    # set up the transport vector variables and quantities.
-    for m in eachindex(pt)
-        
-        # variables
-        initializeorder!(pt[m].v, pt[m].v0)
-
-        # du/dt
-        initializeorder!(pt[m].ζ, p.θ, pt[m].v.c)
-
-        # variables: first update.
-        increaseorder!(pt[m].v, pt[m].ζ.c)
-
-        # increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
-        # increaseorder!(p.u, p.θ.c)
-    end
-
-    return nothing
-end
-
-
-function increaseorder!(
-    p::GeodesicIVPBuffer,
-    ::EnableParallelTransport,
-    )
-
-    pt = p.parallel_transport
-
-    # set up the geodesic variables and related quantities.
-    increaseorder!(p, DisableParallelTransport())
-
-    # update the transport vector variables and quantities.
-    for m in eachindex(pt)
+function GeodesicPiece(
+    x::Vector{Vector{T}},
+    u::Vector{Vector{T}},
+    parallel_transport::Vector,
+    )::GeodesicPiece{T} where T
     
-        # dv/dt
-        increaseorder!(pt[m].ζ, p.θ, pt[m].v.c)
+    vs::Vector{Vector{Vector{T}}} = collect( parallel_transport[m].v.c for m in eachindex(parallel_transport) )
 
-        # variables: first update.
-        increaseorder!(pt[m].v, pt[m].ζ.c)
+    return GeodesicPiece(x, u, vs)
+end
 
-        # increaseorder!(p.x, p.u.c) # x must be updated before u, since we hardcoded updates to always use the last element.
-        # increaseorder!(p.u, p.θ.c)
-    end
+function GeodesicPiece(
+    x::Vector{Vector{T}},
+    u::Vector{Vector{T}},
+    )::GeodesicPiece{T} where T
     
-    return nothing
+    return GeodesicPiece(x, u, Vector{Vector{Vector{T}}}(undef, 0))
 end
 
-# only decrease x and u and {pt[m].v}_m. Does not decrease intermediates variables and their buffers, such as  θ and ζ.
-function decreaseorder!(
-    p::GeodesicIVPBuffer, 
-    ::EnableParallelTransport,
-    min_order::Integer,
+getsolpiecetype(::GeodesicIVPStatement{MT,T}) where {MT,T} = GeodesicPiece{T}
+
+function getdim(C::GeodesicPiece)::Int
+    return length(C.x)
+end
+
+function getorder(C::GeodesicPiece)::Int
+    return length(C.x[begin])-1
+end
+
+function getNtransports(C::GeodesicPiece)::Int
+    return length(C.vs)
+end
+
+########### evaluation container.
+
+struct GeodesicEvaluation{T} <: VariableContainer
+    position::Vector{T}
+    velocity::Vector{T}
+    vector_fields::Vector{Vector{T}}
+end
+
+function GeodesicEvaluation(::Type{T}, N_vars::Integer, N_transports::Integer)::GeodesicEvaluation{T} where T
+    return GeodesicEvaluation(
+        ones(T, N_vars) .* NaN,
+        ones(T, N_vars) .* NaN,
+        collect( ones(T, N_vars) .* NaN for _ = 1:N_transports ),
     )
-
-    # if length(p.x.c) < 1
-    #     println("Warning, decreaseorder!() received an polynomial less than order 1. Did not decrease order further.")
-    #     return nothing
-    # end
-
-    pt = p.parallel_transport
-
-    # decrease the position p.x and geodesic velocity/vector field p.u.
-    decreaseorder!(p, DisableParallelTransport(), min_order)
-
-    # update the transport vector variables and quantities.
-    for m in eachindex(pt)
-        decreaseorder!(pt[m].v, 1, min_order)
-    end
-
-    return nothing
 end
 
+function getvariablecontainer(
+    prob_params::GeodesicIVPStatement{MT,T},
+    )::GeodesicEvaluation{T} where {T, MT}
+    
+    return GeodesicEvaluation(
+        T,
+        getdim(prob_params),
+        getNtransports(prob_params),
+    )
+end

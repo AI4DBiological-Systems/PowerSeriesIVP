@@ -1,12 +1,12 @@
 #################
 
 function continuitycheck(
-    sol::PiecewiseTaylorPolynomial{T};
+    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}};
     atol = eps(T)*10,
     ) where T
     
     N = getNpieces(sol)
-    N_vars = getNvars(sol)
+    D = getdim(sol)
     for n in Iterators.take(eachindex(sol.coefficients), N-1)
 
 
@@ -20,7 +20,7 @@ function continuitycheck(
         c_x_next = sol.coefficients[n+1].x
         c_u_next = sol.coefficients[n+1].u
 
-        for d = 1:N_vars
+        for d = 1:D
             
             # # separate.
             pass_flag = initialconditioncheck(c_x[d], c_x_next[d], h, t0)
@@ -89,11 +89,11 @@ function differentiatepolynomial!(out::Vector{T}, c::Vector{T})::Nothing where T
 end
 
 function getderivativediscrepancies(
-    sol::PiecewiseTaylorPolynomial{T},
+    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
     M::Integer, # we analyze up to this order, for x.
     ) where T
     
-    N_vars = getNvars(sol)
+    D = getdim(sol)
     N = getNpieces(sol)
     N_boundaries = N-1 # excludeing the end points.
 
@@ -102,26 +102,26 @@ function getderivativediscrepancies(
     du_coefficients = Vector{T}(undef, 0)
     
     # output.
-    endpoint_err = Matrix{T}(undef, N_vars, N_boundaries)
+    endpoint_err = Matrix{T}(undef, D, N_boundaries)
     fill!(endpoint_err, convert(T, NaN))
 
-    endpoint_err_x = collect( Matrix{T}(undef, N_vars, N_boundaries) for _ = 0:M )
+    endpoint_err_x = collect( Matrix{T}(undef, D, N_boundaries) for _ = 0:M )
     for i in eachindex(endpoint_err_x)
         fill!(endpoint_err_x[i], convert(T, NaN))
     end
 
-    xu0_err = Matrix{T}(undef, N_vars, N_boundaries)
+    xu0_err = Matrix{T}(undef, D, N_boundaries)
     fill!(xu0_err, convert(T, NaN))
 
-    xuh_err = Matrix{T}(undef, N_vars, N_boundaries)
+    xuh_err = Matrix{T}(undef, D, N_boundaries)
     fill!(xuh_err, convert(T, NaN))
 
-    endpoint_err_u = collect( Matrix{T}(undef, N_vars, N_boundaries) for _ = 0:M )
+    endpoint_err_u = collect( Matrix{T}(undef, D, N_boundaries) for _ = 0:M )
     for i in eachindex(endpoint_err_u)
         fill!(endpoint_err_u[i], convert(T, NaN))
     end
 
-    interval_err = zeros(T, N_vars, N_boundaries)
+    interval_err = zeros(T, D, N_boundaries)
 
     orders = Vector{Int}(undef, N_boundaries)
 
@@ -139,7 +139,7 @@ function getderivativediscrepancies(
         c_x_next = sol.coefficients[n+1].x
         c_u_next = sol.coefficients[n+1].u
 
-        for d = 1:N_vars
+        for d = 1:D
             
             # this should be essentially eps(), since the PSM was based on this relation.
             xu0_err[d,n] = abs(c_u[d][begin] - c_x[d][begin+1])

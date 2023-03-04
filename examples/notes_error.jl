@@ -45,7 +45,7 @@ min_err_u_order_set = collect( minimum(endpoint_err_u[i]) for i in eachindex(end
 @show max_err_u_order_set
 println()
 
-# I am here. devise strategy based on the derivaitve continuity to control step size
+# devise strategy based on the derivaitve continuity to control step size
 # and order increases.
 # Need Lipschitz continuous on d( f ∘ R ), so this is kind of important!!
 # check where in the proof we need this condition, and see if we can get away with it...

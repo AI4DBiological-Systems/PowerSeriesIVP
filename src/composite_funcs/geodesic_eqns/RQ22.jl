@@ -366,8 +366,10 @@ struct RQ22IVPBuffer{T} <: GeodesicIVPBuffer # formally RQGeodesicBuffer{T}
 
 end
 
+getbuffertype(::GeodesicIVPStatement{RQ22Metric{T},T}) where T = RQ22IVPBuffer{T}
+
 # does not create a copy of x0, u0, v0_set.
-function getivpbuffer(
+function getIVPbuffer(
     metric_params::RQ22Metric{T},
     x0::Vector{T},
     u0::Vector{T},
@@ -397,24 +399,4 @@ function getivpbuffer(
         x0, u0,
         #copy(x0), copy(u0), # the supplied initial conditions might be overwritten later. make a copy is safer.
     )
-end
-
-
-# used only for continuity test on x, which doesn't need the computation involving the parallel transported vector field solutions.
-# therefore, we ignore resetting the parallel transport field to reduce computation.
-function resetbuffer!(
-    p::RQ22IVPBuffer{T},
-    ::DisableParallelTransport,
-    x0::Vector{T},
-    u0::Vector{T},
-    ) where T
-
-    resetbuffer!(p.θ)
-    resetbuffer!(p.u)
-    resetbuffer!(p.x)
-
-    p.x0[:] = x0
-    p.u0[:] = u0
-
-    return nothing
 end

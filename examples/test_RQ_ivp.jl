@@ -66,7 +66,7 @@ T = Float64
 #     max_pieces = 100000000,
 # )
 # metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-# prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0)
+# prob_params = PowerSeriesIVP.GeodesicIVPStatement(metric_params, x0, u0)
 # sol = PowerSeriesIVP.solveIVP!(
 #     prob_params,
 #     PowerSeriesIVP.DisableParallelTransport(),
@@ -90,7 +90,7 @@ config = PowerSeriesIVP.AdaptOrderConfig(
     N_analysis_terms = 2,
 )
 metric_params = PowerSeriesIVP.RQ22Metric(a,b)
-prob_params = PowerSeriesIVP.GeodesicIVPProblem(metric_params, x0, u0, v0_set)
+prob_params = PowerSeriesIVP.GeodesicIVPStatement(metric_params, x0, u0, v0_set)
 sol = PowerSeriesIVP.solveIVP(
     prob_params,
     PowerSeriesIVP.EnableParallelTransport(),
@@ -290,7 +290,11 @@ struct EvalXTrait end
 struct EvalUTrait end
 
 # based on PowerSeriesIVP.evalsolution!().
-function evalpiecewisesolAD(::Type{FT}, A::PowerSeriesIVP.PiecewiseTaylorPolynomial, t) where FT
+function evalpiecewisesolAD(
+    ::Type{FT},
+    A::PowerSeriesIVP.PiecewiseTaylorPolynomial,
+    t,
+    ) where FT
 
     expansion_points = A.expansion_points
     t_start = PowerSeriesIVP.getstarttime(A)
@@ -465,21 +469,3 @@ t = t0 + h
 @show norm(dx_AD(t) - u_func(t))
 @show dx_AD(t)
 @show u_func(t)
-
-
-
-
-############## root finding for affine constraint intersection.
-
-# I am here
-"""
-https://stackoverflow.com/questions/4505308/efficiently-determining-if-a-polynomial-has-a-root-in-the-interval-0-t
-if multiple roots in an interval, keep bisecting the interval until the theorm says only one root, nearest to the starting end point.
-
-repeat to find the intervals for each affine inequatity constraint.
-
-    take the earliest interval, then use bisection or ITP to find the only root.
-https://en.wikipedia.org/wiki/ITP_method
-
-
-"""

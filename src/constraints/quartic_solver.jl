@@ -228,7 +228,7 @@ end
 # mutates intersection_buf.
 function searchintersection!(
     intersection_buf::RootsBuffer{T},
-    sol::PiecewiseTaylorPolynomial{T},
+    sol::PiecewiseTaylorPolynomial,
     constraints,
     ) where T
     
