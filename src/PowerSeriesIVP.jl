@@ -25,9 +25,11 @@ include("./composite_funcs/geodesic_eqns/RQ22.jl")
 include("./composite_funcs/geodesic_eqns/post_methods.jl")
 
 # engine for solving IVPs via PSM.
-include("./IVPs/methods.jl")
-include("./IVPs/adaptive_strategy.jl")
+include("./IVPs/methods.jl") # merge this to engine.jl and methods.jl in geodesic folder.
 include("./IVPs/engine.jl") # move contents and rename this file.
+
+include("./IVPs/geodesic_eqns/methods.jl")
+include("./IVPs/geodesic_eqns/adaptive_strategy.jl")
 
 # constraint intersection detection.
 include("./constraints/conversion.jl")

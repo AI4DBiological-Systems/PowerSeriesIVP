@@ -193,6 +193,7 @@ println()
 ```
 
 # TODO:
+- constrained, fixed order.
 - post processing routine to detect which constraint was hit. for testing.
 - Line version of IVP. data structure, engine, etc. not using IVP, or special case of RQgeodeisc with fixed order 1. Use new datastructure that is subtype of GeodesicIVP.
 

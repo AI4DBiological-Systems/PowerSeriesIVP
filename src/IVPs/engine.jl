@@ -1,7 +1,7 @@
 
 function solveIVP(
     ::Type{ST},
-    prob_params::GeodesicIVPStatement,
+    prob_params::IVPStatement,
     pt_trait::IVPVariationTrait,
     t_start::T,
     t_fin::T,
@@ -114,54 +114,21 @@ function mapexitflag(t::Real, t_fin::Real, instruction::Symbol)::Symbol
     return :success
 end
 
-# mutates sol and eval_buffer.
-function storesolutionpiece!(
-    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
-    eval_buffer::GeodesicEvaluation{T},
-    pt_trait::PT,
-    prob::GeodesicIVPBuffer,
-    t_expansion::T,
-    h::T,
-    ) where {PT,T}
-
-    # add the coefficients for the solution piece.
-    new_coefficients = GeodesicPiece(prob.x.c, prob.u.c, prob.parallel_transport)
-    push!(sol.coefficients, new_coefficients)
-    push!(sol.expansion_points, t_expansion)
-    push!(sol.steps, h)
-
-    # get the initial conditions for the next IVP that the next solution piece solves.
-    t_next = t_expansion + h
-    evalsolution!(eval_buffer, pt_trait, new_coefficients, t_next, t_expansion)
-    
-    return nothing
-end
-
 # exits with eval_buffer holding the solution evaluated at t_next = t_expansion + h.
 function solvesegmentIVP!(
-    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
-    test_IVP_buffer::GeodesicIVPBuffer,
-    eval_buffer::GeodesicEvaluation{T},
-    prob::GeodesicIVPBuffer,
-    pt_trait::ParallelTransportTrait,
+    sol::PiecewiseTaylorPolynomial,
+    test_IVP_buffer::IVPBuffer,
+    eval_buffer::VariableContainer,
+    prob::IVPBuffer,
+    pt_trait::IVPVariationTrait,
     t_expansion::T,
     config::IVPConfig,
     C::ConstraintsTrait,
     )::Tuple{T,Symbol} where T
 
-    # # solve for an appropriate step size, increasing the order according to the adaptation strategy in strategy_config.
-    # h = computetaylorsolution!(
-    #     prob,
-    #     pt_trait,
-    #     config.h_initial;
-    #     ϵ = config.ϵ,
-    #     L_test_max = config.L_test_max,
-    #     r_order = config.r_order,
-    #     h_max = config.h_max,
-    #     N_analysis_terms = config.N_analysis_terms,
-    # )
-    
     getfirstorder!(prob, pt_trait) # this brings the solution to order 1.
+
+    # # solve for an appropriate step size, increasing the order according to the adaptation strategy in strategy_config.
     h, instruction = computetaylorsolution!(
         prob, 
         test_IVP_buffer,
@@ -179,20 +146,21 @@ function solvesegmentIVP!(
     return t_next, instruction
 end
 
+# see post_methods.jl for each family of IVPs for storesolutionpiece!() 
 
 ###### adaptive step
 
 
-# no constraints.
+# no constraints, fixed order.
 function computetaylorsolution!(
-    prob::GeodesicIVPBuffer,
-    test_IVP_buffer::GeodesicIVPBuffer,
-    eval_buffer::GeodesicEvaluation{T},
-    pt_trait::PT,
+    prob::IVPBuffer,
+    test_IVP_buffer::IVPBuffer,
+    eval_buffer::VariableContainer,
+    pt_trait::IVPVariationTrait,
     t0::T,
     config::FixedOrderConfig{T},
     ::NoConstraints,
-    ) where {T, PT}
+    )::Tuple{T,Symbol} where T
 
     ### get to a high enough order so that we can start computing the error.
     #@show length(prob.x.c[1]), length(prob.u.c[1])
@@ -223,14 +191,14 @@ function computetaylorsolution!(
 end
 
 function computetaylorsolution!(
-    prob::GeodesicIVPBuffer,
-    test_IVP_buffer::GeodesicIVPBuffer,
-    eval_buffer::GeodesicEvaluation{T},
-    pt_trait::PT,
+    prob::IVPBuffer,
+    test_IVP_buffer::IVPBuffer,
+    eval_buffer::VariableContainer,
+    pt_trait::IVPVariationTrait,
     t0::T,
     config::AdaptOrderConfig{T},
     C::ConstraintsTrait,
-    ) where {T, PT}
+    )::Tuple{T,Symbol} where T
 
     ### set up
 
@@ -277,7 +245,7 @@ function computetaylorsolution!(
     h, constraint_ind = refinestep!(
         C,
         h,
-        p.x.c,
+        prob,
     )
     #@show constraint_ind
 
@@ -309,7 +277,7 @@ function computetaylorsolution!(
         )
 
         h, constraint_ind = refinestepnumerical!(
-            C, h, h_prev, p.x.c, 
+            C, h, h_prev, prob, 
         )
 
         #valid_h = (0 < h < h)

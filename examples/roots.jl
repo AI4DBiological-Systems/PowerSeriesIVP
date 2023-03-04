@@ -377,7 +377,6 @@ y_line_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
 PyPlot.figure(fig_num)
 fig_num += 1
 
-PyPlot.plot(t_viz, y_tb_viz, label = "toolbox")
 PyPlot.plot(t_viz, y_line_viz, label = "line")
 PyPlot.plot(t_viz, line_geodesic.(t_viz), "--", label = "line geodesic")
 
