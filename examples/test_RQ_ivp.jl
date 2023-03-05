@@ -298,7 +298,7 @@ function evalpiecewisesolAD(
 
     expansion_points = A.expansion_points
     t_start = PowerSeriesIVP.getstarttime(A)
-    t_fin = PowerSeriesIVP.getendtime(A)
+    t_fin = t_start + PowerSeriesIVP.getsimulationinterval(A)
 
     if !(t_start <= t <= t_fin)
 
@@ -321,14 +321,14 @@ function evalpiecewisesolAD(
     return NaN
 end
 
-function evalpiecewisesolAD(::Type{EvalXTrait}, c::PowerSeriesIVP.GeodesicPiece, t, a)
+function evalpiecewisesolAD(::Type{EvalXTrait}, c::PowerSeriesIVP.GeodesicPowerSeries, t, a)
 
     @assert length(c.x) == length(c.u)
 
     return collect( evaltaylorAD(c.x[d], t, a) for d in eachindex(c.x) )
 end
 
-function evalpiecewisesolAD(::Type{EvalUTrait}, c::PowerSeriesIVP.GeodesicPiece, t, a)
+function evalpiecewisesolAD(::Type{EvalUTrait}, c::PowerSeriesIVP.GeodesicPowerSeries, t, a)
 
     @assert length(c.x) == length(c.u)
 
@@ -386,7 +386,7 @@ t = t_start + 0.1
 println("derivative of position curve at t = $t:")
 @show norm( dx_AD(t) - u_AD(t) )
 
-t_tests = LinRange(t_start, PowerSeriesIVP.getendtime(sol) - 1e-12, 2000)
+t_tests = LinRange(t_start, t_start + PowerSeriesIVP.getsimulationinterval(sol) - 1e-12, 2000)
 discrepancies = collect( norm( dx_AD(t_tests[i]) - u_AD(t_tests[i]) ) for i in eachindex(t_tests) )
 @show sum(discrepancies)
 @show findmax(discrepancies)

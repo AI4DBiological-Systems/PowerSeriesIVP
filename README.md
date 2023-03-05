@@ -63,7 +63,7 @@ sol = PowerSeriesIVP.solveIVP(
     t_fin,
     config,
 )
-println("The estimated interval of validity of the piece-wise numerical solution is from time ", t_start, " to ", PowerSeriesIVP.getendtime(sol))
+println("The estimated interval of validity of the piece-wise numerical solution is from time ", t_start, " to ", t_start + PowerSeriesIVP.getsimulationinterval(sol))
 println()
 
 ```

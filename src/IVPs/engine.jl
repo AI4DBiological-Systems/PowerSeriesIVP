@@ -5,12 +5,12 @@ function solveIVP(
     pt_trait::IVPVariationTrait,
     t_start::T,
     t_fin::T,
-    config::IVPConfig;
-    constraints_info::ConstraintsTrait = NoConstraints(),
+    config::IVPConfig,
+    constraints_info::ConstraintsTrait,
     )::Tuple{ST,Symbol} where {T, ST}
 
     sol = PiecewiseTaylorPolynomial(T, getsolpiecetype(prob_params))
-    eval_buffer = getvariablecontainer(prob_params)
+    eval_buffer = allocatevariablecontainer(prob_params)
 
     exit_flag = solveIVP!(
         sol,
@@ -19,12 +19,37 @@ function solveIVP(
         pt_trait,
         t_start,
         t_fin,
-        config;
-        constraints_info = constraints_info,
+        config,
+        constraints_info,
     )
 
     return sol, exit_flag
 end
+
+function solveIVP!(
+    sol::PiecewiseTaylorPolynomial,
+    eval_buffer::VariableContainer,
+    prob_params::IVPStatement,
+    pt_trait::IVPVariationTrait,
+    t_start::T,
+    t_fin::T,
+    config::IVPConfig,
+    constraints_info::ConstraintsTrait,
+    )::Symbol where T
+
+    return solveIVP!(
+        sol,
+        eval_buffer,
+        getIVPtrait(prob_params),
+        prob_params,
+        pt_trait,
+        t_start,
+        t_fin,
+        config,
+        constraints_info,
+    )
+end
+
 
 # generate a piece-wise polynomials (seperately for each variable) that approximately solve an IVP of the form:
 # - starts at t = 0, stop at t = t_fin,
@@ -33,12 +58,13 @@ end
 function solveIVP!(
     sol::PiecewiseTaylorPolynomial,
     eval_buffer::VariableContainer,
+    ::NumericalIVPTrait,
     prob_params::IVPStatement,
     pt_trait::IVPVariationTrait,
     t_start::T,
     t_fin::T,
-    config::IVPConfig;
-    constraints_info::ConstraintsTrait = NoConstraints(),
+    config::IVPConfig,
+    constraints_info::ConstraintsTrait,
     )::Symbol where T
 
     # #set up.

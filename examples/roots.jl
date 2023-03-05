@@ -157,12 +157,20 @@ sol, exit_flag = PowerSeriesIVP.solveIVP(
     # h_initial,
     t_start,
     t_fin,
-    config;
-    constraints_info = constraints_info,
+    config,
+    constraints_info,
 )
 @show length(sol.coefficients)
 orders = PowerSeriesIVP.getpieceorders(sol)
-end_time = PowerSeriesIVP.getendtime(sol)
+end_time = t_start + PowerSeriesIVP.getsimulationinterval(sol)
+
+end_eval, status_flag = PowerSeriesIVP.evalsolution(
+    PowerSeriesIVP.getvariabletype(sol),
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol,
+    end_time-1e-9,
+)
+
 
 # (c_x, c_u, next_x, next_u, h) = ([[-0.40243248293794137, -0.9754736537655263, -0.028283214576385357, 0.008649894756430094, 0.005392191906369124], [0.8540414903329187, -0.341379056315598, -0.1582639812836908, -0.032351280660213325, 0.003273286430183644], [-0.6651248667822778, -1.0410555755312705, 0.003524793084258744, 0.014106457829175854, 0.004967531777339607]], [[-0.9754736537655263, -0.056566429152770714, 0.02594968426929028, 0.021568767625476496, 0.0009422561798294823], [-0.341379056315598, -0.3165279625673816, -0.09705384198063997, 0.013093145720734577, 0.011047314839612375], [-1.0410555755312705, 0.007049586168517488, 0.04231937348752756, 0.019870127109358426, -0.0013052033827502707]], [[-0.40707354090780734, -0.9757421559656958, -0.02815903716542786], [0.852413933441089, -0.34288700416659107, -0.15872522860720406], [-0.6700771836505584, -1.0410210801714856, 0.003726784484356198]], [[-0.9757421559656958, -0.05631807433085572, 0.026257624356730923], [-0.34288700416659107, -0.3174504572144081, -0.09686548487608504], [-1.0410210801714856, 0.007453568968712396, 0.042602766460731106]], 0.004757092965693477)
 # xd = tt->PowerSeriesIVP.evaltaylorAD(c_x[1], tt, 0.0)
@@ -189,8 +197,8 @@ end_time = PowerSeriesIVP.getendtime(sol)
 #     PowerSeriesIVP.EnableParallelTransport(),
 #     t_start,
 #     t_fin,
-#     config;
-#     constraints_info = constraints_info,
+#     config,
+#     constraints_info,
 # );
 # @assert 1==2
 # # ContinuitySecondDerivative, GuentherWolfStep:
@@ -220,8 +228,8 @@ sol2, exit_flag2 = PowerSeriesIVP.solveIVP(
     # h_initial,
     t_start,
     t_fin,
-    config;
-    constraints_info = constraints_info,
+    config,
+    constraints_info,
 )
 
 orders = collect( PowerSeriesIVP.getorder(sol.coefficients[i]) for i in eachindex(sol.coefficients) )
@@ -238,30 +246,43 @@ N_viz = 1000
 t_viz = LinRange(t_start, end_time, N_viz)
 
 # evals.
-x_evals = collect( ones(N_vars) for _ = 1:N_viz )
-u_evals = collect( ones(N_vars) for _ = 1:N_viz )
+#x_evals = collect( ones(N_vars) for _ = 1:N_viz )
+#u_evals = collect( ones(N_vars) for _ = 1:N_viz )
 
 N_transports = PowerSeriesIVP.getNtransports(sol)
-vs_evals = collect( collect( ones(N_vars) for _ = 1:N_transports ) for _ = 1:N_viz )
+
 status_flags = falses(N_viz) # true for good eval by sol.
-PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, vs_evals, sol, t_viz)
+sol_evals = collect( PowerSeriesIVP.allocatevariablecontainer(sol) for _ = 1:N_viz )
+PowerSeriesIVP.batchevalsolution!(
+    status_flags,
+    sol_evals,
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol,
+    t_viz,
+)
 
 
-
-y_evals = collect( ones(N_vars) for _ = 1:N_viz )
-u_evals2 = collect( ones(N_vars) for _ = 1:N_viz )
-vs_evals2 = collect( collect( ones(N_vars) for _ = 1:N_transports ) for _ = 1:N_viz )
+sol_evals2 = collect( PowerSeriesIVP.allocatevariablecontainer(sol) for _ = 1:N_viz )
 status_flags2 = falses(N_viz) # true for good eval by sol.
-PowerSeriesIVP.batchevalsolution!(status_flags2, y_evals, u_evals2, vs_evals2, sol2, t_viz)
+PowerSeriesIVP.batchevalsolution!(
+    status_flags2,
+    sol_evals2,
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol2,
+    t_viz,
+)
 
-@show norm(x_evals[1] - x0)
-@show norm(y_evals[1] - x0)
+
+println("Initial condition check of solutions:")
+@show norm(sol_evals[begin].position - x0)
+@show norm(sol_evals2[begin].position - x0)
+println()
 
 # plot trajectory vs. time.
 
 d_select = 2
-x_psm_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
-y_psm_viz = collect( y_evals[n][d_select] for n in eachindex(y_evals) )
+x_psm_viz = collect( sol_evals[n].position[d_select] for n in eachindex(sol_evals) )
+y_psm_viz = collect( sol_evals2[n].position[d_select] for n in eachindex(sol_evals2) )
 
 slope2 = u0[d_select]
 intercept2 = x_psm_viz[begin] - slope2 * t_viz[begin]
@@ -297,18 +318,18 @@ x32 = collect( (bs[m] - dot(as[m][1:2], [x1_range[i]; x2_range[j]]))/as[m][3] fo
 
 
 # plot trajectory.
-x1_viz = collect( x_evals[n][1] for n in eachindex(x_evals) )
-x2_viz = collect( x_evals[n][2] for n in eachindex(x_evals) )
-x3_viz = collect( x_evals[n][3] for n in eachindex(x_evals) )
+x1_viz = collect( sol_evals[n].position[1] for n in eachindex(sol_evals) )
+x2_viz = collect( sol_evals[n].position[2] for n in eachindex(sol_evals) )
+x3_viz = collect( sol_evals[n].position[3] for n in eachindex(sol_evals) )
 
 line_evals = collect( x0 + t .* u0 for t in t_viz )
 line_x1_viz = collect( line_evals[n][1] for n in eachindex(line_evals) )
 line_x2_viz = collect( line_evals[n][2] for n in eachindex(line_evals) )
 line_x3_viz = collect( line_evals[n][3] for n in eachindex(line_evals) )
 
-y1_viz = collect( y_evals[n][1] for n in eachindex(y_evals) )
-y2_viz = collect( y_evals[n][2] for n in eachindex(y_evals) )
-y3_viz = collect( y_evals[n][3] for n in eachindex(y_evals) )
+y1_viz = collect( sol_evals2[n].position[1] for n in eachindex(sol_evals2) )
+y2_viz = collect( sol_evals2[n].position[2] for n in eachindex(sol_evals2) )
+y3_viz = collect( sol_evals2[n].position[3] for n in eachindex(sol_evals2) )
 
 PyPlot.figure(fig_num)
 PyPlot.subplot(111, projection="3d")
@@ -350,41 +371,37 @@ PyPlot.title("trajectory x1, x2")
 
 
 
+line_params = PowerSeriesIVP.GeodesicIVPStatement(
+    PowerSeriesIVP.EuclideanMetric(),
+    x0, u0, v0_set,
+)
 
+sol_line, line_exit_flag = PowerSeriesIVP.solveIVP(
+    PowerSeriesIVP.getsoltype(line_params),
+    line_params,
+    PowerSeriesIVP.EnableParallelTransport(),
+    t_start,
+    t_fin,
+    config,
+    constraints_info,
+)
 
+t = t_start + PowerSeriesIVP.getsimulationinterval(sol_line)
+# t = 13.221851217892796
+# t = 41.461364511031384
+# t = 12.136600033835759
 
-#@assert 1==2
+line_eval = PowerSeriesIVP.allocatevariablecontainer(sol_line)
+PowerSeriesIVP.evalsolution!(
+    line_eval,
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol_line,
+    t,
+    t_start,
+)
 
-# I am here.
-# write line intersection:
-# evalsolution()
-# solveIVP (means, find intersection given t_fin and initial conditions).
-# move onto RCG after that.
+x_oracle = t .* u0 + x0
+@show norm(line_eval.position - x_oracle)
 
-line = PowerSeriesIVP.createline(x0, u0, t_start, t_fin)
-
-# evals.
-x_evals = collect( ones(N_vars) for _ = 1:N_viz )
-u_evals = collect( ones(N_vars) for _ = 1:N_viz )
-status_flags = falses(N_viz) # true for good eval by sol.
-PowerSeriesIVP.batchevalsolution!(status_flags, x_evals, u_evals, line, t_viz)
-
-## prepare for plot.
-d_select = 1
-y_line_viz = collect( x_evals[n][d_select] for n in eachindex(x_evals) )
-
-
-PyPlot.figure(fig_num)
-fig_num += 1
-
-PyPlot.plot(t_viz, y_line_viz, label = "line")
-PyPlot.plot(t_viz, line_geodesic.(t_viz), "--", label = "line geodesic")
-
-PyPlot.legend()
-PyPlot.xlabel("time")
-PyPlot.ylabel("trajectory")
-PyPlot.title("line, dim $d_select")
-
-println("check line against line_geodesic:")
-@show norm(line_geodesic.(t_viz) - y_line_viz) # should be zero if createline() is correctly implemented.
-println()
+# set up test intersection code, make into test, demo with solveIVP!() with provided buffer instead of solveIVP() without providing buffer.
+# then, release, and move onto RCG.

@@ -15,62 +15,37 @@ end
 
 # no generic version for evalsolution!(), but make a setupevalbuffer() generic function.
 
-# I am here. fix this up to use traits, and make it generic.
-function evalsolution(
-    pt_trait::ParallelTransportTrait,
-    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
-    t,
-    )::Tuple{GeodesicEvaluation{T}, Bool} where T
+function allocatevariablecontainer(::Type{VC}, X)::VC where VC <: VariableContainer
+    return allocatevariablecontainer(X)
+end
 
-    out = GeodesicEvaluation(T, getdim(A), getNtransports(A))
+function evalsolution(
+    ::Type{VT},
+    pt_trait::IVPVariationTrait,
+    A::PiecewiseTaylorPolynomial,
+    t,
+    )::Tuple{VT, Bool} where VT <: VariableContainer
+
+    out = allocatevariablecontainer(A)
     status_flag = evalsolution!(out, pt_trait, A, t)
 
     return out, status_flag
 end
 
-# I am here. make a generic version of this.
 function batchevalsolution!(
     status_flags::BitVector,
-    positions_buffer::Vector{Vector{T}},
-    velocities_buffer::Vector{Vector{T}},
-    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
-    ts,
-    ) where T
+    out::Vector{VT}, # [eval_index]
+    variation_trait::IVPVariationTrait,
+    A::PiecewiseTaylorPolynomial,
+    ts::AbstractArray,
+    ) where VT <: VariableContainer
 
-    @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getdim(A), getNtransports(A))
-
-    for n in eachindex(ts)
-        status_flags[n] = evalsolution!(out, DisableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.
-        
-        positions_buffer[n][:] = out.position
-        velocities_buffer[n][:] = out.velocity
-    end
-
-    return nothing
-end
-
-function batchevalsolution!(
-    status_flags::BitVector,
-    positions_buffer::Vector{Vector{T}}, # [eval_index][dimension].
-    velocities_buffer::Vector{Vector{T}}, # [eval_index][dimension].
-    vector_fields_buffer::Vector{Vector{Vector{T}}}, # [eval index][vector field index][dimension]
-    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
-    ts,
-    ) where T
-
-    @assert length(positions_buffer) == length(ts) == length(velocities_buffer) == length(status_flags)
-    out = GeodesicEvaluation(T, getdim(A), getNtransports(A))
+    N_evals = length(ts)
+    resize!(out, N_evals)
+    resize!(status_flags, N_evals)
 
     for n in eachindex(ts)
-        status_flags[n] = evalsolution!(out, EnableParallelTransport(), A, ts[n]) # TODO, return error flags or which evals were valid.
-        
-        positions_buffer[n][:] = out.position
-        velocities_buffer[n][:] = out.velocity
-        
-        for m in eachindex(out.vector_fields)
-            vector_fields_buffer[n][m][:] = out.vector_fields[m]
-        end
+        status_flags[n] = evalsolution!(out[n], variation_trait, A, ts[n])
     end
 
     return nothing
@@ -86,10 +61,10 @@ function evalsolution!(
 
     expansion_points = A.expansion_points
     t_start = getstarttime(A)
-    t_fin = getendtime(A)
+    t_fin = t_start + getsimulationinterval(A)
 
     if !(t_start <= t <= t_fin)
-
+        
         return false
     end
 
@@ -102,12 +77,11 @@ function evalsolution!(
         end
     end
 
-    if t < expansion_points[end] + A.steps[end]
-
-        evalsolution!(out, pt_trait, A.coefficients[end], t, expansion_points[end])
-        return true
+    if t > expansion_points[end] + A.steps[end]
+        # case: our solver algorithm did not reach t_fin, and t is beyond the last solution piece's estimated interval of validity.
+        return false
     end
 
-    # case: our solver algorithm did not reach t_fin, and t is beyond the last solution piece's estimated interval of validity.
-    return false
+    evalsolution!(out, pt_trait, A.coefficients[end], t, expansion_points[end])
+    return true
 end

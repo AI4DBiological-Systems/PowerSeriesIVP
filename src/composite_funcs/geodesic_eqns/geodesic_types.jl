@@ -7,10 +7,15 @@ abstract type ParallelTransportTrait <: IVPVariationTrait end
 struct DisableParallelTransport <: ParallelTransportTrait end
 struct EnableParallelTransport <: ParallelTransportTrait end
 
+struct EnableGeodesicLine{PT<: ParallelTransportTrait} <: IVPVariationTrait
+    pt_trait::PT
+end
+
 ####  the super type that is used in specific geodesic equations' composition functions.
 # e.g., used in RQ22.jl.
 abstract type GeodesicIVPBuffer <: IVPBuffer end
 
+abstract type GeodesicSolutionPiece <: SolutionPiece end
 
 #### parameters to the geodesic equation IVPs.
 
@@ -20,6 +25,9 @@ struct RQ22Metric{T} <: MetricParams
     a::T
     b::T
 end
+
+struct EuclideanMetric <: MetricParams end
+
 
 # use getbuffertype(::MetricParams) = GeodesicIVPBuffer.
 # i.e. getbuffertype(::RQ22Metric) = RQ22IVPBuffer is defined in RQ22.jl.
@@ -33,6 +41,7 @@ struct GeodesicIVPStatement{MT,T} <: IVPStatement
     u0::Vector{T}
     v0_set::Vector{Vector{T}}
 end
+
 
 function GeodesicIVPStatement(
     metric_params::MT,
@@ -51,7 +60,6 @@ function getNtransports(A::GeodesicIVPStatement)
     return length(A.v0_set)
 end
 
-getsoltype(::GeodesicIVPStatement{MT,T}) where {MT,T} = PiecewiseTaylorPolynomial{T,GeodesicPiece{T}}
 
 
 
@@ -65,46 +73,64 @@ struct VelocityContinuityStep <: NonProbingStep end # dx/dt at t = h vs. u_next(
 
 ############ solution piece of an interval from the geodesic IVP.
 
-struct GeodesicPiece{T} <: SolutionPiece
+struct GeodesicPowerSeries{T} <: GeodesicSolutionPiece
     
-    # [variable index][order index]
-    x::Vector{Vector{T}} # coefficients for the solution state.
-    u::Vector{Vector{T}} # coefficients for first-derivative of state.
+    # [dimension index][order index]
+    x::Vector{Vector{T}} # coefficients for the position.
+    u::Vector{Vector{T}} # coefficients for first-derivative of position.
     vs::Vector{Vector{Vector{T}}} # i-th entry contain the coefficients for the i-th parallel vector field.
 end
 
-function GeodesicPiece(
+function GeodesicPowerSeries(
     x::Vector{Vector{T}},
     u::Vector{Vector{T}},
     parallel_transport::Vector,
-    )::GeodesicPiece{T} where T
+    )::GeodesicPowerSeries{T} where T
     
     vs::Vector{Vector{Vector{T}}} = collect( parallel_transport[m].v.c for m in eachindex(parallel_transport) )
 
-    return GeodesicPiece(x, u, vs)
+    return GeodesicPowerSeries(x, u, vs)
 end
 
-function GeodesicPiece(
+function GeodesicPowerSeries(
     x::Vector{Vector{T}},
     u::Vector{Vector{T}},
-    )::GeodesicPiece{T} where T
+    )::GeodesicPowerSeries{T} where T
     
-    return GeodesicPiece(x, u, Vector{Vector{Vector{T}}}(undef, 0))
+    return GeodesicPowerSeries(x, u, Vector{Vector{Vector{T}}}(undef, 0))
 end
 
-getsolpiecetype(::GeodesicIVPStatement{MT,T}) where {MT,T} = GeodesicPiece{T}
+getsoltype(::GeodesicIVPStatement{MT,T}) where {MT,T} = PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}}
+getsolpiecetype(::GeodesicIVPStatement{MT,T}) where {MT,T} = GeodesicPowerSeries{T}
 
-function getdim(C::GeodesicPiece)::Int
+function getdim(C::GeodesicSolutionPiece)::Int
     return length(C.x)
 end
 
-function getorder(C::GeodesicPiece)::Int
+function getNtransports(C::GeodesicSolutionPiece)::Int
+    return length(C.vs)
+end
+
+function getorder(C::GeodesicPowerSeries)::Int
     return length(C.x[begin])-1
 end
 
-function getNtransports(C::GeodesicPiece)::Int
-    return length(C.vs)
+########## the line case.
+# see line_methods.jl in the IVP/geodesic_eqns folder for methods.
+
+# GeodesicLine replaces GeodesicPowerSeries when we solve the geodesic IVP with the Euclidean Riemannian metric.
+struct GeodesicLine{T} <: GeodesicSolutionPiece
+    
+    # [dimension index]
+    x::Vector{T} # position.
+    u::Vector{T} # velocity.
+    vs::Vector{Vector{T}} # [m-th vector field][d-th dimension] set of vector fields.
 end
+
+getsoltype(::GeodesicIVPStatement{EuclideanMetric,T}) where T = PiecewiseTaylorPolynomial{T,GeodesicLine{T}}
+getsolpiecetype(::GeodesicIVPStatement{EuclideanMetric,T}) where T = GeodesicLine{T}
+getvariabletype(::PiecewiseTaylorPolynomial{T,GeodesicLine{T}}) where T = GeodesicEvaluation{T}
+
 
 ########### evaluation container.
 
@@ -122,13 +148,26 @@ function GeodesicEvaluation(::Type{T}, N_vars::Integer, N_transports::Integer)::
     )
 end
 
-function getvariablecontainer(
-    prob_params::GeodesicIVPStatement{MT,T},
+getvariabletype(::GeodesicIVPStatement{MT,T}) where {T,MT} = GeodesicEvaluation{T}
+getvariabletype(::PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}}) where T = GeodesicEvaluation{T}
+
+function allocatevariablecontainer(
+    p::GeodesicIVPStatement{MT,T},
     )::GeodesicEvaluation{T} where {T, MT}
     
-    return GeodesicEvaluation(
-        T,
-        getdim(prob_params),
-        getNtransports(prob_params),
-    )
+    return GeodesicEvaluation(T, getdim(p), getNtransports(p))
 end
+
+function allocatevariablecontainer(
+    A::PiecewiseTaylorPolynomial{T,SP},
+    )::GeodesicEvaluation{T} where {T,SP<:GeodesicSolutionPiece}
+    
+    return GeodesicEvaluation(T, getdim(A), getNtransports(A))
+end
+
+
+###### other traits.
+
+getIVPtrait(::GeodesicIVPStatement{MT,T}) where {MT,T} = NumericalIVPTrait() # default, catch-all.
+getIVPtrait(::GeodesicIVPStatement{EuclideanMetric,T}) where T = LineIVPTrait() # an analytical case: solve without invoking numerical methods for the ODE part.
+

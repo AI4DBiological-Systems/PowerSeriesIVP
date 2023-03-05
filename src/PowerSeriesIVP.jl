@@ -24,12 +24,14 @@ include("./composite_funcs/geodesic_eqns/RQ22.jl")
 # other metrics go here.
 include("./composite_funcs/geodesic_eqns/post_methods.jl")
 
+# IVP solving-related methods for each IVP family.
+include("./IVPs/geodesic_eqns/methods.jl")
+include("./IVPs/geodesic_eqns/adaptive_strategy.jl")
+include("./IVPs/geodesic_eqns/line_methods.jl") # analytic solution for the geodesic of the Euclidean metric: a line.
+
 # engine for solving IVPs via PSM.
 include("./IVPs/methods.jl") # merge this to engine.jl and methods.jl in geodesic folder.
 include("./IVPs/engine.jl") # move contents and rename this file.
-
-include("./IVPs/geodesic_eqns/methods.jl")
-include("./IVPs/geodesic_eqns/adaptive_strategy.jl")
 
 # constraint intersection detection.
 include("./constraints/conversion.jl")

@@ -67,7 +67,7 @@ end
 
 # mutates sol and eval_buffer.
 function storesolutionpiece!(
-    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
+    sol::PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}},
     eval_buffer::GeodesicEvaluation{T},
     pt_trait::ParallelTransportTrait,
     prob::GeodesicIVPBuffer,
@@ -76,7 +76,7 @@ function storesolutionpiece!(
     ) where T
 
     # add the coefficients for the solution piece.
-    new_coefficients = GeodesicPiece(prob.x.c, prob.u.c, prob.parallel_transport)
+    new_coefficients = GeodesicPowerSeries(prob.x.c, prob.u.c, prob.parallel_transport)
     push!(sol.coefficients, new_coefficients)
     push!(sol.expansion_points, t_expansion)
     push!(sol.steps, h)
@@ -134,15 +134,13 @@ end
 
 # no checking against interval of validity here. That responsibility is on the calling routine.
 function evalsolution!(
-    out::GeodesicEvaluation{T},
+    out::GeodesicEvaluation,
     ::DisableParallelTransport,
-    c::GeodesicPiece{T},
+    c::GeodesicPowerSeries,
     t,
     a,
-    ) where T
+    )
 
-    # @show length(c.x)
-    # @show length(out.position)
     @assert length(c.x) == length(c.u) == length(out.position) == length(out.velocity)
 
     for d in eachindex(c.x)
@@ -155,12 +153,12 @@ end
 
 # no checking against interval of validity here. That responsibility is on the calling routine.
 function evalsolution!(
-    out::GeodesicEvaluation{T},
+    out::GeodesicEvaluation,
     ::EnableParallelTransport,
-    c::GeodesicPiece{T},
+    c::GeodesicPowerSeries,
     t,
     a,
-    ) where T
+    )
 
     evalsolution!(out, DisableParallelTransport(), c, t, a)
 
@@ -178,7 +176,7 @@ end
 
 # used in solution analysis.
 function extractcoefficients(
-    A::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
+    A::PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}},
     )::Tuple{Vector{Vector{T}},Vector{Vector{T}}} where T
 
     c_x = collect( A.coefficients[k].x for k in eachindex(A.coefficients) )
@@ -187,6 +185,9 @@ function extractcoefficients(
     return c_x, c_u
 end
 
-function getNtransports(A::PiecewiseTaylorPolynomial{T, GeodesicPiece{T}}) where T
+function getNtransports(
+    A::PiecewiseTaylorPolynomial{T, SP},
+    ) where {T, SP <: GeodesicSolutionPiece}
+    
     return getNtransports(A.coefficients[begin])
 end

@@ -23,7 +23,16 @@ abstract type IVPBuffer end
 
 abstract type IVPStatement end
 
-abstract type IVPVariationTrait end # to toggle between similar IVPs that share common computation features.
+
+
+# to toggle between similar IVPs that share common computation features.
+abstract type IVPVariationTrait end
+
+# to decide whether to use the power series method to numerically solve the IVP, or use an analytic solution.
+# search getIVPtrait() for the trait function.
+abstract type IVPTrait end
+struct NumericalIVPTrait <: IVPTrait end # the IVP requires the power series method, a numerical solution.
+struct LineIVPTrait <: IVPTrait end # the IVP has an analytic solution: a line.
 
 ##### variable types, which defines the IVP.
 
@@ -59,7 +68,7 @@ function PiecewiseTaylorPolynomial(::Type{T}, ::Type{VT}) where {T, VT<: Solutio
     )
 end
 
-function getendtime(sol::PiecewiseTaylorPolynomial{T,VT})::T where {T,VT}
+function getsimulationinterval(sol::PiecewiseTaylorPolynomial{T,VT})::T where {T,VT}
     return sol.expansion_points[end] + sol.steps[end]
 end
 

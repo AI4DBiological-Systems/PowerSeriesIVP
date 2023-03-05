@@ -7,15 +7,7 @@
 #     return false
 # end
 
-function findbindingconstraint(
-    sol::PiecewiseTaylorPolynomial,
-    constraints::BoundConstraints
-    )
-    # I am here. do this for basic error checking on the intersection with many constraints.
-    # since the 3D plots are getting unwiedly for many constraints and 3D.
-end
-
-# straight line. # I am here.
+#= # straight line. # I am here.
 function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin::T) where T <: AbstractFloat
     
     D = length(position)
@@ -27,8 +19,8 @@ function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin:
     x = collect( [position[d]; velocity[d]] for d = 1:D ) # starting position, velocity.
     u = collect( [velocity[d]; zero(T)] for d = 1:D ) # velocity, acceleration.
 
-    coefficients = Vector{GeodesicPiece{T}}(undef, 0)
-    push!(coefficients, GeodesicPiece(x,u))
+    coefficients = Vector{GeodesicPowerSeries{T}}(undef, 0)
+    push!(coefficients, GeodesicPowerSeries(x,u))
 
     # time.
     expansion_points = [t_start;]
@@ -42,4 +34,12 @@ function createline(position::Vector{T}, velocity::Vector{T}, t_start::T, t_fin:
         # velocity,
         # Vector{Vector{T}}(undef, 0),
     )
+end =#
+
+function findbindingconstraint(
+    sol::PiecewiseTaylorPolynomial,
+    constraints::BoundConstraints
+    )
+    # I am here. do this for basic error checking on the intersection with many constraints.
+    # since the 3D plots are getting unwiedly for many constraints and 3D.
 end

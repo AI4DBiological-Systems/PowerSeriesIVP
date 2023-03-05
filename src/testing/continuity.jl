@@ -1,7 +1,7 @@
 #################
 
 function continuitycheck(
-    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}};
+    sol::PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}};
     atol = eps(T)*10,
     ) where T
     
@@ -89,7 +89,7 @@ function differentiatepolynomial!(out::Vector{T}, c::Vector{T})::Nothing where T
 end
 
 function getderivativediscrepancies(
-    sol::PiecewiseTaylorPolynomial{T,GeodesicPiece{T}},
+    sol::PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}},
     M::Integer, # we analyze up to this order, for x.
     ) where T
     
