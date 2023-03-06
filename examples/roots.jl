@@ -19,24 +19,24 @@ a = 12.24
 b = 3.34
 # graph of (12.24^2 + x^2)/(3.34^2 + x^2) # unimodal.
 
-N_vars = 3
+D = 3
 
 # bound constraints.
-lbs = -10.5 .* ones(N_vars)
-ubs = 13.3 .* ones(N_vars)
+lbs = -10.5 .* ones(D)
+ubs = 13.3 .* ones(D)
 
 # ## IVP simulation interval and initial conditions.
 t_start = 0.0 # starting time.
 t_fin = 25.0 # finish time.
 
-x0 = randn(N_vars) # starting position.
-u0 = randn(N_vars) # starting velocity.
+x0 = randn(D) # starting position.
+u0 = randn(D) # starting velocity.
 
 # transport 2 vector fields.
 N_parallel_vector_fields = 1
 
 ## set to same as u.
-v0_set = collect( rand(N_vars) for _ = 1:N_parallel_vector_fields)
+v0_set = collect( rand(D) for _ = 1:N_parallel_vector_fields)
 
 ## constraints.
 
@@ -57,9 +57,9 @@ ITP_config = PowerSeriesIVP.ITPConfig(
 # # constraints configs & buffers.
 
 # # ### test case: 2 hyperplane constraints.
-# N_constraints = 2
-# #as, bs = generateHyperplaneConstraintscase1(N_constraints)
-# as, bs = generateHyperplaneConstraintscase1(Float64)
+#N_constraints = 2
+#as, bs = generateHyperplaneConstraintscase1(N_constraints, D)
+# as, bs = generatecvxpolyhedron(Float64, N_hyperplanes, D; test_pt = zeros(D))
 # constraints = PowerSeriesIVP.HyperplaneConstraints(as, bs)
 # constraints_info = PowerSeriesIVP.ConstraintsContainer(
 #     as,
@@ -99,8 +99,8 @@ constraints_info = PowerSeriesIVP.ConstraintsContainer(
     max_divisions = 0,
     solver_config = ITP_config,
 )
-as = constraints_info.constraints.affine.normals
-bs = constraints_info.constraints.affine.offsets
+as = constraints_info.constraints.hyperplane.normals
+bs = constraints_info.constraints.hyperplane.offsets
 
 # # ### No constraints.
 # constraints_info = PowerSeriesIVP.NoConstraints()
@@ -162,7 +162,7 @@ sol, exit_flag = PowerSeriesIVP.solveIVP(
 )
 @show length(sol.coefficients)
 orders = PowerSeriesIVP.getpieceorders(sol)
-end_time = t_start + PowerSeriesIVP.getsimulationinterval(sol)
+end_time = PowerSeriesIVP.getendtime(sol)
 
 end_eval, status_flag = PowerSeriesIVP.evalsolution(
     PowerSeriesIVP.getvariabletype(sol),
@@ -246,8 +246,8 @@ N_viz = 1000
 t_viz = LinRange(t_start, end_time, N_viz)
 
 # evals.
-#x_evals = collect( ones(N_vars) for _ = 1:N_viz )
-#u_evals = collect( ones(N_vars) for _ = 1:N_viz )
+#x_evals = collect( ones(D) for _ = 1:N_viz )
+#u_evals = collect( ones(D) for _ = 1:N_viz )
 
 N_transports = PowerSeriesIVP.getNtransports(sol)
 
@@ -359,6 +359,7 @@ PyPlot.figure(fig_num)
 fig_num += 1
 
 PyPlot.plot(x1_viz, x2_viz, "purple", label = "sol", linewidth = 3)
+
 PyPlot.plot(line_x1_viz, line_x2_viz, label = "line")
 
 PyPlot.plot(y1_viz, y2_viz, "--", label = "sol, twice speed", linewidth = 3)
@@ -368,7 +369,20 @@ PyPlot.xlabel("x1")
 PyPlot.ylabel("x2")
 PyPlot.title("trajectory x1, x2")
 
+constraints = constraints_info.constraints
+end_time = PowerSeriesIVP.getendtime(sol)
+t2, delta_t = PowerSeriesIVP.forwardseekintersection(
+    sol,
+    constraints,
+    t_start,
+    end_time,
+    PowerSeriesIVP.DisableParallelTransport();
+    N_samples = 10,
+)
 
+#@assert 5==4
+
+##### test line.
 
 
 line_params = PowerSeriesIVP.GeodesicIVPStatement(
@@ -386,7 +400,7 @@ sol_line, line_exit_flag = PowerSeriesIVP.solveIVP(
     constraints_info,
 )
 
-t = t_start + PowerSeriesIVP.getsimulationinterval(sol_line)
+t = PowerSeriesIVP.getendtime(sol_line)
 # t = 13.221851217892796
 # t = 41.461364511031384
 # t = 12.136600033835759
@@ -403,5 +417,7 @@ PowerSeriesIVP.evalsolution!(
 x_oracle = t .* u0 + x0
 @show norm(line_eval.position - x_oracle)
 
-# set up test intersection code, make into test, demo with solveIVP!() with provided buffer instead of solveIVP() without providing buffer.
-# then, release, and move onto RCG.
+# demo with solveIVP!() with provided buffer instead of solveIVP() without providing buffer.
+# write readme interface that are useful to RCG.
+# Look at RCG, how we'll be calling PowerSeriesIVP to make last minute changes,
+# before releasing PowerSeriesIVP.

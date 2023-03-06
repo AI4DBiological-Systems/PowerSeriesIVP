@@ -21,13 +21,13 @@ function updateintersectionpolynomials!(
     constraints::AffineConstraints,
     ) where T
 
-    N_hyperplane_constraints = getNconstraints(constraints.affine)
+    N_hyperplane_constraints = getNconstraints(constraints.hyperplane)
     N_bound_constraints = getNconstraints(constraints.bound)
     N_constraints = N_bound_constraints + N_hyperplane_constraints
     resize!(cs, N_constraints)
 
-    #cs_affine = view(cs, 1:N_hyperplane_constraints)
-    updateintersectionpolynomials!(cs, x, constraints.affine, 1, N_hyperplane_constraints)
+    #cs_hyperplane = view(cs, 1:N_hyperplane_constraints)
+    updateintersectionpolynomials!(cs, x, constraints.hyperplane, 1, N_hyperplane_constraints)
     
     #cs_bound = view(cs, 1:N_bound_constraints)
     updateintersectionpolynomials!(cs, x, constraints.bound, N_hyperplane_constraints+1, N_constraints)

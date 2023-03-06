@@ -61,7 +61,7 @@ function evalsolution!(
 
     expansion_points = A.expansion_points
     t_start = getstarttime(A)
-    t_fin = t_start + getsimulationinterval(A)
+    t_fin = getendtime(A)
 
     if !(t_start <= t <= t_fin)
         

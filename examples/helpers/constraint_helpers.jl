@@ -1,19 +1,41 @@
 
-function generateHyperplaneConstraints(
-    N_constraints::Integer,
-    )
-    as = collect( randn(N_vars) for _ = 1:N_constraints )
-    bs = randn(N_constraints) .- 25
-    
-    for n in eachindex(as)
-        if as[n][end] > 0
-            as[n] = -as[n]
-            bs[n] = -bs[n]
+function generateBoundConstraints(::Type{T}, D::Integer) where T
+
+    lbs = ones(T, D)
+    fill!(lbs, convert(T,randn()))
+
+    ubs = ones(T, D)
+    fill!(ubs, convert(T,randn()))
+
+    if lbs[begin] > ubs[begin]
+        lbs, ubs = ubs, lbs
+    end
+
+    return lbs, ubs
+end
+
+# make sure the generated hyperplanes form a convex polyhedron.
+# must contain the origin of the coordinate system.
+function generatecvxpolyhedron(::Type{T}, N::Integer, D::Integer; test_pt = zeros(T,D)) where T
+
+    as = Vector{Vector{T}}(undef, N)
+    bs = Vector{T}(undef, N)
+
+    for m in eachindex(as)
+        
+        as[m] = rand(D)
+        bs[m] = randn()
+
+        while dot(as[m], test_pt) > bs[m]
+            as[m] = rand(D)
+            bs[m] = randn()
         end
     end
 
     return as, bs
 end
+
+#### specific constraints for testing.
 
 function generateHyperplaneConstraintscase1(::Type{T}) where T
 

@@ -298,7 +298,7 @@ function evalpiecewisesolAD(
 
     expansion_points = A.expansion_points
     t_start = PowerSeriesIVP.getstarttime(A)
-    t_fin = t_start + PowerSeriesIVP.getsimulationinterval(A)
+    t_fin = PowerSeriesIVP.getendtime(A)
 
     if !(t_start <= t <= t_fin)
 
@@ -386,7 +386,7 @@ t = t_start + 0.1
 println("derivative of position curve at t = $t:")
 @show norm( dx_AD(t) - u_AD(t) )
 
-t_tests = LinRange(t_start, t_start + PowerSeriesIVP.getsimulationinterval(sol) - 1e-12, 2000)
+t_tests = LinRange(t_start, PowerSeriesIVP.getendtime(sol) - 1e-12, 2000)
 discrepancies = collect( norm( dx_AD(t_tests[i]) - u_AD(t_tests[i]) ) for i in eachindex(t_tests) )
 @show sum(discrepancies)
 @show findmax(discrepancies)

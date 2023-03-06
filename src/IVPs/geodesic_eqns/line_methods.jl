@@ -130,7 +130,7 @@ function intersectline(
     line::GeodesicLine{T},
     )::T where T
 
-    t1 = intersectline(C.affine, line)
+    t1 = intersectline(C.hyperplane, line)
     t2 = intersectline(C.bound, line)
 
     return min(t1,t2)

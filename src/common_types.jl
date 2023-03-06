@@ -68,7 +68,7 @@ function PiecewiseTaylorPolynomial(::Type{T}, ::Type{VT}) where {T, VT<: Solutio
     )
 end
 
-function getsimulationinterval(sol::PiecewiseTaylorPolynomial{T,VT})::T where {T,VT}
+function getendtime(sol::PiecewiseTaylorPolynomial{T,VT})::T where {T,VT}
     return sol.expansion_points[end] + sol.steps[end]
 end
 

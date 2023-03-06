@@ -89,7 +89,7 @@ end
 function HyperplaneConstraints(
     ordering_constraints::Vector{Tuple{Int,Int}}, # if the m-th entry is (i,j), then it means x[i] <= x[j] + b[m]. for the m-th cosntraint.
     bs::Vector{T}, # the m-th entry is bs[m].
-    N_vars::Integer,
+    D::Integer,
     )::HyperplaneConstraints{T} where T
 
     M = length(ordering_constraints)
@@ -97,7 +97,7 @@ function HyperplaneConstraints(
 
     as = Vector{Vector{T}}(undef, M)
     for m in eachindex(as)
-        as[m] = zeros(T, N_vars)
+        as[m] = zeros(T, D)
         
         i, j = ordering_constraints[m]
         as[m][i] = one(T)
@@ -129,12 +129,12 @@ end
 abstract type MultiTypeConstraints <: ConstraintType end
 
 struct AffineConstraints{T,RT} <: MultiTypeConstraints
-    affine::HyperplaneConstraints{T} # general affine constraints.
+    hyperplane::HyperplaneConstraints{T} # general hyperplane constraints.
     bound::BoundConstraints{T,RT} # bound constraints.
 end
 
 function getNconstraints(C::AffineConstraints)::Int
-    return getNconstraints(C.affine) + getNconstraints(C.bound)
+    return getNconstraints(C.hyperplane) + getNconstraints(C.bound)
 end
 
 ## container, for interfacing with the engine.
@@ -173,13 +173,34 @@ function ConstraintsContainer(
     solver_config = ITPConfig(T),
     )::ConstraintsContainer{T, AffineConstraints{T,UnitRange{Int}}} where T
 
-    N_vars = length(lbs)
-    @assert length(ubs) == N_vars
+    D = length(lbs)
+    @assert length(ubs) == D
 
-    bound = BoundConstraints(lbs, 1:N_vars, ubs, 1:N_vars)
-    affine = HyperplaneConstraints(ordering_constraints, bs, N_vars)
-    constraints = AffineConstraints(affine, bound)
+    bound = BoundConstraints(lbs, 1:D, ubs, 1:D)
+    hyperplane = HyperplaneConstraints(ordering_constraints, bs, D)
+    
+    return ConstraintsContainer(
+        hyperplane,
+        bound;
+        complex_zero_tol = complex_zero_tol,
+        L_min = L_min,
+        L_max = L_max,
+        max_divisions = max_divisions,
+        solver_config = solver_config,
+    )
+end
 
+function ConstraintsContainer(
+    hyperplane::HyperplaneConstraints{T},
+    bound::BoundConstraints{T,RT};
+    complex_zero_tol::Real = 1e-8,
+    L_min::Integer = 4,
+    L_max::Integer = 10,
+    max_divisions = 0,
+    solver_config = ITPConfig(T),
+    )::ConstraintsContainer{T, AffineConstraints{T,RT}} where {T,RT}
+
+    constraints = AffineConstraints(hyperplane, bound)
     N_constraints = getNconstraints(constraints)
 
     return ConstraintsContainer(
@@ -209,10 +230,10 @@ function ConstraintsContainer(
     solver_config = ITPConfig(T),
     )::ConstraintsContainer{T, BoundConstraints{T,UnitRange{Int}}} where T
 
-    N_vars = length(lbs)
-    @assert length(ubs) == N_vars
+    D = length(lbs)
+    @assert length(ubs) == D
 
-    constraints = BoundConstraints(lbs, 1:N_vars, ubs, 1:N_vars)
+    constraints = BoundConstraints(lbs, 1:D, ubs, 1:D)
     N_constraints = getNconstraints(constraints)
 
     return ConstraintsContainer(
