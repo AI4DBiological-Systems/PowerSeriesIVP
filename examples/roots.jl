@@ -59,7 +59,7 @@ ITP_config = PowerSeriesIVP.ITPConfig(
 # # ### test case: 2 hyperplane constraints.
 #N_constraints = 2
 #as, bs = generateHyperplaneConstraintscase1(N_constraints, D)
-# as, bs = generatecvxpolyhedron(Float64, N_hyperplanes, D; test_pt = zeros(D))
+# as, bs = generatecvxpolyhedron(Float64, N_hyperplanes, D; interior_pt = zeros(D))
 # constraints = PowerSeriesIVP.HyperplaneConstraints(as, bs)
 # constraints_info = PowerSeriesIVP.ConstraintsContainer(
 #     as,

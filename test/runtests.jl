@@ -105,7 +105,7 @@ end
 
         # generate constraints.
         #as, bs = generateHyperplaneConstraints(T, N_hyperplanes, D)
-        as, bs = generatecvxpolyhedron(T, N_hyperplanes, D; test_pt = zeros(T, D))
+        as, bs = generatecvxpolyhedron(T, N_hyperplanes, D; interior_pt = zeros(T, D))
         lbs, ubs = generateBoundConstraints(T, D)
 
         bound = PowerSeriesIVP.BoundConstraints(lbs, 1:D, ubs, 1:D)

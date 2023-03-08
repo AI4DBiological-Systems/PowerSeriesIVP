@@ -16,7 +16,7 @@ end
 
 # make sure the generated hyperplanes form a convex polyhedron.
 # must contain the origin of the coordinate system.
-function generatecvxpolyhedron(::Type{T}, N::Integer, D::Integer; test_pt = zeros(T,D)) where T
+function generatecvxpolyhedron(::Type{T}, N::Integer, D::Integer; interior_pt = zeros(T,D)) where T
 
     as = Vector{Vector{T}}(undef, N)
     bs = Vector{T}(undef, N)
@@ -26,7 +26,7 @@ function generatecvxpolyhedron(::Type{T}, N::Integer, D::Integer; test_pt = zero
         as[m] = rand(D)
         bs[m] = randn()
 
-        while dot(as[m], test_pt) > bs[m]
+        while dot(as[m], interior_pt) > bs[m]
             as[m] = rand(D)
             bs[m] = randn()
         end
