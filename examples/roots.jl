@@ -164,6 +164,9 @@ sol, exit_flag = PowerSeriesIVP.solveIVP(
 orders = PowerSeriesIVP.getpieceorders(sol)
 end_time = PowerSeriesIVP.getendtime(sol)
 
+@show exit_flag, PowerSeriesIVP.wasvalidsession(exit_flag)
+println()
+
 end_eval, status_flag = PowerSeriesIVP.evalsolution(
     PowerSeriesIVP.getvariabletype(sol),
     PowerSeriesIVP.EnableParallelTransport(),
@@ -416,6 +419,37 @@ PowerSeriesIVP.evalsolution!(
 
 x_oracle = t .* u0 + x0
 @show norm(line_eval.position - x_oracle)
+
+### single query for Euclidean IVP solution (i.e. line).
+line_eval2 = PowerSeriesIVP.allocatevariablecontainer(sol_line)
+PowerSeriesIVP.evalsolution!(
+    line_eval2,
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol_line,
+    t,
+)
+@show norm(line_eval.position - line_eval2.position)
+
+# single query for RQ IVP solution.
+sol_eval2 = PowerSeriesIVP.allocatevariablecontainer(sol)
+PowerSeriesIVP.evalsolution!(
+    sol_eval2,
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol,
+    PowerSeriesIVP.getendtime(sol),
+)
+@show PowerSeriesIVP.getendtime(sol), sol_eval2.position
+
+
+#### test conversion of line solution data type to power series solution data type.
+T = Float64
+sol_ps_line = PowerSeriesIVP.convertsolution(
+    PowerSeriesIVP.GeodesicPowerSeries{T},
+    sol_line,
+)
+
+conversion_discrepancies = PowerSeriesIVP.testconversion(sol_ps_line, sol_line, t_viz)
+@show maximum(conversion_discrepancies) # should be zero.
 
 # demo with solveIVP!() with provided buffer instead of solveIVP() without providing buffer.
 # write readme interface that are useful to RCG.

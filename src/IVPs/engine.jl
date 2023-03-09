@@ -140,6 +140,14 @@ function mapexitflag(t::Real, t_fin::Real, instruction::Symbol)::Symbol
     return :success
 end
 
+function wasvalidsession(exit_flag::Symbol)::Bool
+    if exit_flag == :success || exit_flag == :intersection_found
+        return true
+    end
+
+    return false
+end
+
 # exits with eval_buffer holding the solution evaluated at t_next = t_expansion + h.
 function solvesegmentIVP!(
     sol::PiecewiseTaylorPolynomial,

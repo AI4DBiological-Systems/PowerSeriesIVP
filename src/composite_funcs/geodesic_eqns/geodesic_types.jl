@@ -20,8 +20,9 @@ abstract type GeodesicSolutionPiece <: SolutionPiece end
 #### parameters to the geodesic equation IVPs.
 
 abstract type MetricParams <: IVPParameters end
+abstract type NonEuclideanMetric <: MetricParams end
 
-struct RQ22Metric{T} <: MetricParams
+struct RQ22Metric{T} <: NonEuclideanMetric
     a::T
     b::T
 end
@@ -78,7 +79,7 @@ struct GeodesicPowerSeries{T} <: GeodesicSolutionPiece
     # [dimension index][order index]
     x::Vector{Vector{T}} # coefficients for the position.
     u::Vector{Vector{T}} # coefficients for first-derivative of position.
-    vs::Vector{Vector{Vector{T}}} # i-th entry contain the coefficients for the i-th parallel vector field.
+    vs::Vector{Vector{Vector{T}}} # [vec field][dim][order] i-th entry contain the coefficients for the i-th parallel vector field.
 end
 
 function GeodesicPowerSeries(

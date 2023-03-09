@@ -251,6 +251,31 @@ function ConstraintsContainer(
 end
 
 function ConstraintsContainer(
+    constraints::BoundConstraints{T,RT};
+    complex_zero_tol::Real = 1e-8,
+    L_min::Integer = 4,
+    L_max::Integer = 10,
+    max_divisions = 0,
+    solver_config = ITPConfig(T),
+    )::ConstraintsContainer{T, BoundConstraints{T,RT}} where {T,RT}
+
+    N_constraints = getNconstraints(constraints)
+
+    return ConstraintsContainer(
+        constraints,
+        RootsBuffer( # quartic solver.
+            complex_zero_tol,
+            L_min,
+            N_constraints,
+        ),
+        RootsUpperBoundBuffer(T, N_constraints, L_max),
+        setupbinomialcoefficients(L_max),
+        max_divisions,
+        solver_config,
+    )
+end
+
+function ConstraintsContainer(
     as::Vector{Vector{T}},
     bs::Vector{T};
     complex_zero_tol::Real = 1e-8,

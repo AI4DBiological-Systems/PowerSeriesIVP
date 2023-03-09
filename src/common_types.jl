@@ -25,7 +25,7 @@ abstract type IVPStatement end
 
 
 
-# to toggle between similar IVPs that share common computation features.
+# to toggle between similar IVPs that share common computation features. Will be used in the future if we handle non-geodesic equations IVPs.
 abstract type IVPVariationTrait end
 
 # to decide whether to use the power series method to numerically solve the IVP, or use an analytic solution.

@@ -205,3 +205,123 @@ function solveIVP!(
 
     return :success
 end
+
+
+####### conversion from GeodesicLine to GeodesicPowerSeries
+
+# see evalline() and evaltaylor() for the logic.
+function convertpiece!(
+    out::GeodesicPowerSeries{T},
+    line::GeodesicLine{T},
+    ) where T
+
+    D = length(line.x)
+    @assert length(line.u) == D
+
+    # position and velocity.
+    resize!(out.x, D)
+    resize!(out.u, D)
+    
+    for d in eachindex(out.x)
+        
+        out.x[d] = Vector{T}(undef, 2)
+        out.x[d][begin] = line.x[d]
+        out.x[d][begin+1] = line.u[d]
+
+        out.u[d] = Vector{T}(undef, 2)
+        out.u[d][begin] = line.u[d]
+        out.u[d][begin+1] = zero(T)
+    end
+
+    # transported vector fields.
+    resize!(out.vs, length(line.vs))
+
+    for m in eachindex(line.vs)
+        
+        out.vs[m] = Vector{Vector{T}}(undef, D)
+        for d in eachindex(line.vs[m])
+            
+            out.vs[m][d] = Vector{T}(undef, 2)
+            out.vs[m][d][begin] = line.vs[m][d]
+            out.vs[m][d][begin+1] = zero(T)
+        end
+    end
+
+    return nothing
+end
+
+function convertpiece(
+    ::Type{GeodesicPowerSeries{T}},
+    line::GeodesicLine{T},
+    )::GeodesicPowerSeries{T} where T
+
+    out = GeodesicPowerSeries(
+        Vector{Vector{T}}(undef, 0),
+        Vector{Vector{T}}(undef, 0),
+        Vector{Vector{Vector{T}}}(undef, 0),
+    )
+    convertpiece!(out, line)
+
+    return out
+end
+
+function convertsolution!(
+    out::PiecewiseTaylorPolynomial{T, GeodesicPowerSeries{T}},
+    line_sol::PiecewiseTaylorPolynomial{T, GeodesicLine{T}},
+    ) where T
+
+    # solution peice.
+    resize!(out.coefficients, 1)
+    out.coefficients[begin] = convertpiece(GeodesicPowerSeries{T}, line_sol.coefficients[begin])
+
+    # time.
+    resize!(out.expansion_points, 1)
+    out.expansion_points[begin] = line_sol.expansion_points[begin]
+
+    resize!(out.steps, 1)
+    out.steps[begin] = line_sol.steps[begin]
+
+    return nothing
+end
+
+function convertsolution(
+    ::Type{GeodesicPowerSeries{T}},
+    line_sol::PiecewiseTaylorPolynomial{T, GeodesicLine{T}},
+    )::PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}} where T
+
+    out = PiecewiseTaylorPolynomial(T, GeodesicPowerSeries{T})
+    convertsolution!(out, line_sol)
+
+    return out
+end
+
+
+################# for testing.
+
+function testconversion(
+    sol_ps::PiecewiseTaylorPolynomial{T,GeodesicPowerSeries{T}},
+    sol_line::PiecewiseTaylorPolynomial{T,GeodesicLine{T}},
+    t_range,
+    ) where T
+
+    eval_ps = allocatevariablecontainer(sol_ps)
+    eval_line = allocatevariablecontainer(sol_line)
+
+    discrepancies = ones(T, length(t_range)) .* Inf
+    
+    for n in eachindex(t_range)
+        t = t_range[n]
+
+        evalsolution!(eval_ps, EnableParallelTransport(), sol_ps, t)
+        evalsolution!(eval_line, EnableParallelTransport(), sol_line, t)
+
+        discrepancies[n] = norm(eval_ps.position - eval_line.position)
+        discrepancies[n] += norm(eval_ps.velocity - eval_line.velocity)
+
+        for m in eachindex(eval_ps.vector_fields)
+            discrepancies[n] += norm(eval_ps.vector_fields[m] - eval_line.vector_fields[m])
+        end
+    end
+
+    return discrepancies
+end
