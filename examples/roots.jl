@@ -164,7 +164,7 @@ sol, exit_flag = PowerSeriesIVP.solveIVP(
 orders = PowerSeriesIVP.getpieceorders(sol)
 end_time = PowerSeriesIVP.getendtime(sol)
 
-@show exit_flag, PowerSeriesIVP.wasvalidsession(exit_flag)
+@show exit_flag, PowerSeriesIVP.encounteredproblem(exit_flag)
 println()
 
 end_eval, status_flag = PowerSeriesIVP.evalsolution(

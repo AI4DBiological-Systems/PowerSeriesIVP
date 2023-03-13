@@ -140,12 +140,13 @@ function mapexitflag(t::Real, t_fin::Real, instruction::Symbol)::Symbol
     return :success
 end
 
-function wasvalidsession(exit_flag::Symbol)::Bool
+# exit_flags are: :success, :intersection_found, :max_pieces_reached, :step_too_small
+function encounteredproblem(exit_flag::Symbol)::Bool
     if exit_flag == :success || exit_flag == :intersection_found
-        return true
+        return false
     end
 
-    return false
+    return true
 end
 
 # exits with eval_buffer holding the solution evaluated at t_next = t_expansion + h.
