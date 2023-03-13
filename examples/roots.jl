@@ -451,7 +451,49 @@ sol_ps_line = PowerSeriesIVP.convertsolution(
 conversion_discrepancies = PowerSeriesIVP.testconversion(sol_ps_line, sol_line, t_viz)
 @show maximum(conversion_discrepancies) # should be zero.
 
-# demo with solveIVP!() with provided buffer instead of solveIVP() without providing buffer.
-# write readme interface that are useful to RCG.
-# Look at RCG, how we'll be calling PowerSeriesIVP to make last minute changes,
-# before releasing PowerSeriesIVP.
+
+########### scaled parallel transport.
+
+#v0_set
+scale_factor = 1.23
+v0_set = collect( v0_set[i] .* scale_factor for i in eachindex(v0_set) )
+prob_params = PowerSeriesIVP.GeodesicIVPStatement(metric_params, x0, u0, v0_set)
+
+sol_sPT, exit_flag_sPT = PowerSeriesIVP.solveIVP(
+    PowerSeriesIVP.getsoltype(prob_params),
+    prob_params,
+    PowerSeriesIVP.EnableParallelTransport(),
+    t_start,
+    t_fin,
+    config,
+    constraints_info,
+)
+@show length(sol_sPT.coefficients)
+orders = PowerSeriesIVP.getpieceorders(sol_sPT)
+end_time = PowerSeriesIVP.getendtime(sol_sPT)
+
+@show exit_flag, PowerSeriesIVP.encounteredproblem(exit_flag_sPT)
+println()
+
+# get test time.
+elapsed_t_porp = 0.93 # propotion factor from 0 (t_start) to 1 (end_time-1e--9)
+t = (end_time-1e-9 -t_start)*elapsed_t_porp + t_start
+
+# test.
+end_eval, status_flag = PowerSeriesIVP.evalsolution(
+    PowerSeriesIVP.getvariabletype(sol),
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol,
+    t,
+)
+
+end_eval_sPT, status_flag_sPT = PowerSeriesIVP.evalsolution(
+    PowerSeriesIVP.getvariabletype(sol_sPT),
+    PowerSeriesIVP.EnableParallelTransport(),
+    sol_sPT,
+    t,
+)
+
+println("should be practically zero if scaled constant in transported vector field can be factored.")
+@show norm(end_eval_sPT.vector_fields - end_eval.vector_fields .* scale_factor)
+
