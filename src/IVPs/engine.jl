@@ -128,7 +128,7 @@ function solveIVP!(
     
     end
 
-    return :max_piece_reached
+    return :max_pieces_reached
 end
 
 function mapexitflag(t::Real, t_fin::Real, instruction::Symbol)::Symbol
