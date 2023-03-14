@@ -66,7 +66,7 @@ ITP_config = PowerSeriesIVP.ITPConfig(
 #     bs;
 #     complex_zero_tol = 1e-8,
 #     L_min = 4,
-#     L_max = 10,
+#     L_max = L_max,
 #     max_divisions = 0,
 #     solver_config = ITP_config,
 # )
@@ -78,7 +78,7 @@ ITP_config = PowerSeriesIVP.ITPConfig(
 #     ubs;
 #     complex_zero_tol = 1e-8,
 #     L_min = 4,
-#     L_max = 10,
+#     L_max = L_max,
 #     max_divisions = 0,
 #     solver_config = ITP_config,
 # )
@@ -95,7 +95,7 @@ constraints_info = PowerSeriesIVP.ConstraintsContainer(
     ordering_shifts; # the m-th entry is bs[m].
     complex_zero_tol = 1e-8,
     L_min = 4,
-    L_max = 10,
+    L_max = L_max,
     #max_divisions = 0,
     solver_config = ITP_config,
 )
@@ -132,7 +132,7 @@ step_config = PowerSeriesIVP.StepConfig(
 
 adaptive_order_config = PowerSeriesIVP.AdaptOrderConfig(
     step_config;
-    L_min = L_min,
+    L_min = 4,
     L_max = L_max, # increase this for maximum higher-order power series.
     order_increase_factor = 1.35,
     max_pieces = 100000, # maximum number of pieces in the piece-wise solution.

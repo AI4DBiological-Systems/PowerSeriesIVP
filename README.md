@@ -192,12 +192,16 @@ println()
 
 ```
 
+For now, always assign `L_min` to `4` if there are constraints.
+
 # TODO:
 - constrained, fixed order.
+
 
 # Future:
 - implement backtrack initial step for current order when Budan's upper bound is inconclusive, Future release.
 - impelemnt simultaneous root solve for all constraint polynomials, and eventually hone in on the interval that is closest to zero, using the ANewDsc algorithm.
+- Allow `L_min` to be less than 4 for constrained simulation.
 
 # Release check list:
 - Make the test-oriented scripts in `\examples` into test sets.
