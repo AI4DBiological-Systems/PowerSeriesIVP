@@ -217,7 +217,7 @@
 # # final order is N_analysis_terms + L_test.
 # # Some functions at particular exapnsion points have Taylor series with vanishing coefficients. Example: https://www.wolframalpha.com/input?i=taylor+expansion+of+%281%2Bx%5E4%29%2F%282%2Bx%5E4%29&key=33rzp
 # # - N_analysis_terms > 1 attempts to mitigate this issue.
-# # - Since N_analysis_terms cannot be infinite, use h_max to guard the case when zero estimated error is detected. h_max = one(T) means no guard, and that zero error means the solution polynomial is exactly the solution of the DE.
+# # - Since N_analysis_terms cannot be infinite, use h_default to guard the case when zero estimated error is detected. h_default = one(T) means no guard, and that zero error means the solution polynomial is exactly the solution of the DE.
 # function computetaylorsolution!(
 #     prob::GeodesicIVPBuffer,
 #     pt_trait::PT,
@@ -225,7 +225,7 @@
 #     ϵ::T = convert(T, 1e-6),
 #     L_test_max::Integer = 10,
 #     r_order::T = convert(T, 0.3),
-#     h_max::T = convert(T, 1),
+#     h_default::T = convert(T, 1),
 #     N_analysis_terms = 2, # make larger than 2 if the solution has many consecutive vanishing Taylor coefficients for certain orders.
 #     ) where {PT,T}
 
@@ -256,7 +256,7 @@
 
 #         # use the first (arb. chosen) variable to analyze how far to step.
 #         expansion_factor = 100.0 # hard code for now.
-#         h = choosestepsize(ϵ, p.x.c[begin]; h_max = h_max)*expansion_factor
+#         h = choosestepsize(ϵ, p.x.c[begin]; h_default = h_default)*expansion_factor
 #     end
 
 #     # error for the l-th order.
@@ -268,7 +268,7 @@
 #     if error_val < error_threshold
 
 #         # error is already tolerable. no need for adaptation. find step and exit.
-#         return choosestepsize(ϵ, p.x.c[error_var_ind]; h_max = h_max)
+#         return choosestepsize(ϵ, p.x.c[error_var_ind]; h_default = h_default)
 #     end
     
 
@@ -286,12 +286,12 @@
 #         if error_val < error_threshold || shrink_change < r_order
         
 #             # Stop increasing the order. Use highest computed order coefficient to get step size.
-#             return choosestepsize(ϵ, p.x.c[error_var_ind]; h_max = h_max)
+#             return choosestepsize(ϵ, p.x.c[error_var_ind]; h_default = h_default)
 #         end
 
 #         err_record[l] = error_val # book keep.
 #     end
 
 #     # Reached max order. Use highest computed order coefficient to get step size.
-#     return choosestepsize(ϵ, p.x.c[error_var_ind]; h_max = h_max)
+#     return choosestepsize(ϵ, p.x.c[error_var_ind]; h_default = h_default)
 # end

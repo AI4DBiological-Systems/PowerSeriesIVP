@@ -210,7 +210,7 @@ function computetaylorsolution!(
     #     config.step_config.ϵ,
     #     prob;
     #     #GuentherWolfStep();
-    #     h_max = config.step_config.h_max,
+    #     h_default = config.step_config.h_default,
     #     step_reduction_factor = config.step_config.reduction_factor,
     # )
     h = choosestepsize!(
@@ -243,7 +243,7 @@ function computetaylorsolution!(
     order_increase_factor = config.order_increase_factor
     min_step = config.min_step
     #r_order = config.r_order
-    #h_max = config.h_max
+    #h_default = config.h_default
     #N_analysis_terms = config.N_analysis_terms
     #step_reduction_factor = config.reduction_factor
     p = prob
@@ -265,7 +265,7 @@ function computetaylorsolution!(
     #     ϵ,
     #     p;
     #     #GuentherWolfStep();
-    #     h_max = h_max,
+    #     h_default = h_default,
     #     step_reduction_factor = step_reduction_factor,
     # )
     h = choosestepsize!(
@@ -354,7 +354,7 @@ function computetaylorsolution!(
         #     p,
         #     ϵ,
         #     N_analysis_terms;
-        #     h_max = h_max,
+        #     h_default = h_default,
         #     step_reduction_factor = step_reduction_factor,
         # )
 

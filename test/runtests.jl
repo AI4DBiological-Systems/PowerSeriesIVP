@@ -68,7 +68,7 @@ end
         strategy;
         #ϵ = 1e-13,# increase this to improve chance that the piece-wise solution is continuous at boundaries.
         ϵ = 1e-6,
-        h_max = Inf,
+        h_default = Inf,
         reduction_factor = 1,
         discount_factor = 0.9,        
     )

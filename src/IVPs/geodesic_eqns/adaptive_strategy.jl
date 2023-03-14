@@ -35,13 +35,13 @@ end
 ############ step size
 
 
-# eq:choose_ODE_step_size. An h_max of Inf means if no higher-order errors are computed, then we assume the model is exact, thus any step is valid. This means the maximum step for which the Taylor polynomial is valid is Inf.
+# eq:choose_ODE_step_size. An h_default of Inf means if no higher-order errors are computed, then we assume the model is exact, thus any step is valid. This means the maximum step for which the Taylor polynomial is valid is Inf.
 function choosestepsizeunivariate(
     ::VelocityContinuityStep,
     ϵ::T,
     p::GeodesicIVPBuffer,
     d::Integer;
-    h_max = one(T),
+    h_default = one(T),
     step_reduction_factor = 2,
     )::T where T
 
@@ -53,7 +53,7 @@ function choosestepsizeunivariate(
         return convert(T, h/step_reduction_factor)
     end
 
-    return convert(T, h_max/step_reduction_factor)
+    return convert(T, h_default/step_reduction_factor)
 end
 
 # also use the conservative factor of 1/2.
@@ -61,13 +61,13 @@ function stepsizeformulaxu(ϵ, x, order)
     return (ϵ/abs(x))^(1/order)
 end
 
-# eq:choose_ODE_step_size. An h_max of Inf means if no higher-order errors are computed, then we assume the model is exact, thus any step is valid. This means the maximum step for which the Taylor polynomial is valid is Inf.
+# eq:choose_ODE_step_size. An h_default of Inf means if no higher-order errors are computed, then we assume the model is exact, thus any step is valid. This means the maximum step for which the Taylor polynomial is valid is Inf.
 function choosestepsizeunivariate(
     ::GuentherWolfStep,
     ϵ::T,
     p::GeodesicIVPBuffer,
     d::Integer;
-    h_max = one(T),
+    h_default = one(T),
     step_reduction_factor = 2,
     )::T where T
 
@@ -79,7 +79,7 @@ function choosestepsizeunivariate(
         return convert(T, h/step_reduction_factor)
     end
 
-    return convert(T, h_max/step_reduction_factor)
+    return convert(T, h_default/step_reduction_factor)
 end
 
 # see http://www.phys.uri.edu/nigh/NumRec/bookfpdf/f16-2.pdf for a constrast of the method from PSM 2019 with mainstream RK adaptive step size selection algorithms.
@@ -93,7 +93,7 @@ function choosestepsize(
     step_trait::NonProbingStep,
     ϵ::T,
     p::GeodesicIVPBuffer;
-    h_max = one(T),
+    h_default = one(T),
     step_reduction_factor = 2,
     )::T where T
 
@@ -106,7 +106,7 @@ function choosestepsize(
             ϵ,
             p,
             d;
-            h_max = h_max,
+            h_default = h_default,
             step_reduction_factor = step_reduction_factor,
         )
         min_h = min(min_h, h)
@@ -120,7 +120,7 @@ function choosestepsize(
     ::AllNonProbingStep,
     ϵ::T,
     p::GeodesicIVPBuffer;
-    h_max = one(T),
+    h_default = one(T),
     step_reduction_factor = 2,
     )::T where T
 
@@ -128,7 +128,7 @@ function choosestepsize(
         GuentherWolfStep(),
         ϵ,
         p;
-        h_max = h_max,
+        h_default = h_default,
         step_reduction_factor = step_reduction_factor,
     )
 
@@ -136,7 +136,7 @@ function choosestepsize(
         GuentherWolfStep(),
         ϵ,
         p;
-        h_max = h_max,
+        h_default = h_default,
         step_reduction_factor = step_reduction_factor,
     )
 
@@ -173,7 +173,7 @@ function choosestepsize!(
         config.strategy,
         config.ϵ,
         prob,
-        h_max = config.h_max,
+        h_default = config.h_default,
         step_reduction_factor = config.reduction_factor,
     )
 
@@ -205,7 +205,7 @@ function choosestepsize!(
         step_strategy.first_step_strategy,
         ϵ,
         prob,
-        h_max = config.h_max,
+        h_default = config.h_default,
         step_reduction_factor = config.reduction_factor,
     )
 

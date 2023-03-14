@@ -183,7 +183,7 @@ h = PowerSeriesIVP.computetaylorsolution!(
     ϵ = convert(T, 1e-6),
     L_test_max = 30,
     r_order = convert(T, 0.3),
-    h_max = convert(T, 1),
+    h_default = convert(T, 1),
     N_analysis_terms = 2,
 )
 # just to be conservative. If we don't reduce h, it seems like as we increase the max order, the derivative of x won't agree with u at t0+h. I suspect because we've started to diverge somewhere between t=t0 to t=t0+h.

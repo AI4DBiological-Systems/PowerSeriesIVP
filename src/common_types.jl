@@ -126,7 +126,7 @@ end
 
 struct StepConfig{T,ST<:StepStrategyTrait}
     ϵ::T
-    h_max::T
+    h_default::T
     reduction_factor::T # a step reduction factor to be applied in addition to the step size formula. larger or equal to 1.
     discount_factor::T
     strategy::ST
@@ -136,14 +136,14 @@ function StepConfig(
     ::Type{T},
     strategy::ST;
     ϵ::Real = 1e-6,
-    h_max::Real = Inf,
+    h_default::Real = Inf,
     reduction_factor = 2,
     discount_factor = 0.9,
     )::StepConfig{T,ST} where {T,ST<:StepStrategyTrait}
 
     return StepConfig(
         convert(T, ϵ),
-        convert(T, h_max),
+        convert(T, h_default),
         convert(T, reduction_factor),
         convert(T, discount_factor),
         strategy,
