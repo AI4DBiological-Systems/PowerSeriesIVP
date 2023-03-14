@@ -96,7 +96,7 @@ constraints_info = PowerSeriesIVP.ConstraintsContainer(
     complex_zero_tol = 1e-8,
     L_min = 4,
     L_max = 10,
-    max_divisions = 0,
+    #max_divisions = 0,
     solver_config = ITP_config,
 )
 as = constraints_info.constraints.hyperplane.normals

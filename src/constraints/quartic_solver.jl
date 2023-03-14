@@ -202,7 +202,7 @@ end
 
 # front end.
 function refinestep!(
-    C::ConstraintsContainer{T},
+    C::ConstraintsContainer,
     h::T,
     x::Vector{Vector{T}},
     )::Tuple{T,Int} where T <: AbstractFloat

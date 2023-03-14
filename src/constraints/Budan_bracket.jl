@@ -180,7 +180,7 @@ end
 
 # returns h, and an integer that signify the hyperplane index if intersected. Return 0 for the integer if no intersection (no roots).
 function refinestepnumerical!(
-    C::ConstraintsContainer{T},
+    C::ConstraintsContainer,
     h::T,
     h_prev::T, # previously known good step size with no intersections.    
     x::Vector{Vector{T}},
@@ -216,6 +216,7 @@ function refinestepnumerical!(
         valid_step = true
         constraint_ind = -1
         for m in eachindex(ubs)
+        #for m in constraint_inds
             if ubs[m] == 1
                 t, success_flag = runITP(
                     A.cs,
@@ -245,7 +246,7 @@ end
 
 # # treplace this with the ANewDsc algorithm.
 # function refinestepnumerical!(
-#     C::ConstraintsContainer{T},
+#     C::ConstraintsContainer,
 #     h::T,
 #     h_prev::T, # previously known good step size with no intersections.    
 #     x::Vector{Vector{T}},

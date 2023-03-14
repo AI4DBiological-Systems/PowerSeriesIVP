@@ -91,7 +91,7 @@ end
 ############ constraint intersection-related.
 
 function refinestep!(
-    C::ConstraintsContainer{T},
+    C::ConstraintsContainer,
     h::T,
     p::GeodesicIVPBuffer,
     )::Tuple{T,Int} where T <: AbstractFloat
@@ -100,7 +100,7 @@ function refinestep!(
 end
 
 function refinestepnumerical!(
-    C::ConstraintsContainer{T},
+    C::ConstraintsContainer,
     h::T,
     h_prev::T, # previously known good step size with no intersections.    
     p::GeodesicIVPBuffer,

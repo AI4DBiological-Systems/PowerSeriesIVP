@@ -20,6 +20,32 @@ function RootsBuffer(zero_tol::T, order::Integer, N_constraints::Integer)::Roots
     )
 end
 
+#= # increase the number of constraints by N.
+function increasebuffer!(A::RootsBuffer{T}, N::Interger) where T
+
+    order = length(A.all_roots)
+
+    for _ = 1:N
+        push!(A.intersection_coefficients, zeros(T, order))
+    end
+
+    resize!(A.smallest_positive_roots, length(A.smallest_positive_roots) + N)
+
+    return nothing
+end
+
+# decrease the number of constraints by N.
+function decreasebuffer!(A::RootsBuffer{T}, N::Interger) where T
+    
+    @assert length(A.intersection_coefficients) >= N
+
+    N_new = length(A.intersection_coefficients)-N
+    resize!(A.intersection_coefficients, N_new)
+    resize!(A.smallest_positive_roots, N_new)
+
+    return nothing
+end =#
+
 struct RootsUpperBoundBuffer{T}
     # [constraints][order]
     cs::Vector{Vector{T}}
@@ -40,6 +66,33 @@ function RootsUpperBoundBuffer(::Type{T}, N_constraints::Integer, order::Integer
     )
 end
 
+#= # increase the number of constraints by N.
+function increasebuffer!(A::RootsUpperBoundBuffer{T}, N::Interger) where T
+
+    order = length(A.cs)
+
+    for _ = 1:N
+        push!(A.cs, zeros(T, order))
+        push!(A.cs_right, zeros(T, order))
+    end
+
+    resize!(A.ubs, length(A.ubs) + N)
+
+    return nothing
+end
+
+# decrease the number of constraints by N.
+function decreasebuffer!(A::RootsUpperBoundBuffer{T}, N::Interger) where T
+    
+    @assert length(A.cs) >= N
+
+    N_new = length(A.cs)-N
+    resize!(A.cs, N_new)
+    resize!(A.cs_right, N_new)
+    resize!(A.ubs, N_new)
+
+    return nothing
+end =#
 
 #### numerical solver types (put into separate library later.)
 struct ITPConfig{T}
@@ -152,7 +205,7 @@ struct ConstraintsContainer{T,CT<:ConstraintType} <: ConstraintsTrait
     explicit_roots_buffer::RootsBuffer{T}
     upperbound_buffer::RootsUpperBoundBuffer{T}
     bino_mat::Matrix{Int}
-    max_divisions::Int
+    #max_divisions::Int
 
     # configs
     solver_config::ITPConfig{T}
@@ -169,7 +222,7 @@ function ConstraintsContainer(
     complex_zero_tol::Real = 1e-8,
     L_min::Integer = 4,
     L_max::Integer = 10,
-    max_divisions = 0,
+    #max_divisions = 0,
     solver_config = ITPConfig(T),
     )::ConstraintsContainer{T, AffineConstraints{T,UnitRange{Int}}} where T
 
@@ -185,7 +238,7 @@ function ConstraintsContainer(
         complex_zero_tol = complex_zero_tol,
         L_min = L_min,
         L_max = L_max,
-        max_divisions = max_divisions,
+        #max_divisions = max_divisions,
         solver_config = solver_config,
     )
 end
@@ -196,7 +249,7 @@ function ConstraintsContainer(
     complex_zero_tol::Real = 1e-8,
     L_min::Integer = 4,
     L_max::Integer = 10,
-    max_divisions = 0,
+    #max_divisions = 0,
     solver_config = ITPConfig(T),
     )::ConstraintsContainer{T, AffineConstraints{T,RT}} where {T,RT}
 
@@ -212,7 +265,7 @@ function ConstraintsContainer(
         ),
         RootsUpperBoundBuffer(T, N_constraints, L_max),
         setupbinomialcoefficients(L_max),
-        max_divisions,
+        #max_divisions,
         solver_config,
     )
 end
@@ -226,7 +279,7 @@ function ConstraintsContainer(
     complex_zero_tol::Real = 1e-8,
     L_min::Integer = 4,
     L_max::Integer = 10,
-    max_divisions = 0,
+    #max_divisions = 0,
     solver_config = ITPConfig(T),
     )::ConstraintsContainer{T, BoundConstraints{T,UnitRange{Int}}} where T
 
@@ -245,7 +298,7 @@ function ConstraintsContainer(
         ),
         RootsUpperBoundBuffer(T, N_constraints, L_max),
         setupbinomialcoefficients(L_max),
-        max_divisions,
+        #max_divisions,
         solver_config,
     )
 end
@@ -255,7 +308,7 @@ function ConstraintsContainer(
     complex_zero_tol::Real = 1e-8,
     L_min::Integer = 4,
     L_max::Integer = 10,
-    max_divisions = 0,
+    #max_divisions = 0,
     solver_config = ITPConfig(T),
     )::ConstraintsContainer{T, BoundConstraints{T,RT}} where {T,RT}
 
@@ -270,7 +323,7 @@ function ConstraintsContainer(
         ),
         RootsUpperBoundBuffer(T, N_constraints, L_max),
         setupbinomialcoefficients(L_max),
-        max_divisions,
+        #max_divisions,
         solver_config,
     )
 end
@@ -281,7 +334,7 @@ function ConstraintsContainer(
     complex_zero_tol::Real = 1e-8,
     L_min::Integer = 4,
     L_max::Integer = 10,
-    max_divisions = 0,
+    # max_divisions = 0,
     solver_config = ITPConfig(T),
     )::ConstraintsContainer{T, HyperplaneConstraints{T}} where T
     
@@ -300,7 +353,7 @@ function ConstraintsContainer(
         ),
         RootsUpperBoundBuffer(T, N_constraints, L_max),
         setupbinomialcoefficients(L_max),
-        max_divisions,
+        # max_divisions,
         solver_config,
     )
 end

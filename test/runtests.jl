@@ -116,7 +116,7 @@ end
             complex_zero_tol = 1e-8,
             L_min = 4,
             L_max = 10,
-            max_divisions = 0,
+            #max_divisions = 0,
             solver_config = PowerSeriesIVP.ITPConfig(T),
         )
         constraints = constraints_info.constraints
